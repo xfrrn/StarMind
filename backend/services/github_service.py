@@ -31,6 +31,9 @@ class GitHubService:
         page = 1
         per_page = 100
 
+        if not self.token:
+            raise ValueError("未找到 GITHUB_TOKEN，请先在环境配置中配置")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             while True:
                 url = f"{GITHUB_API}/user/starred"
@@ -38,15 +41,15 @@ class GitHubService:
 
                 resp = await client.get(url, headers=self.headers, params=params)
 
+                if resp.status_code == 401:
+                    logger.error("GitHub Token 无效或已过期")
+                    raise Exception("GitHub Token 无效，请检查配置")
                 if resp.status_code == 403:
-                    # Rate limit hit
                     remaining = resp.headers.get("X-RateLimit-Remaining", "?")
                     reset_time = resp.headers.get("X-RateLimit-Reset", "?")
-                    logger.warning(
-                        f"GitHub API rate limit hit. Remaining: {remaining}, "
-                        f"Reset: {reset_time}"
-                    )
-                    break
+                    error_msg = f"GitHub API 请求受限或触发限流 (403). Remaining: {remaining}, Reset: {reset_time}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
 
                 resp.raise_for_status()
                 data = resp.json()
@@ -55,8 +58,9 @@ class GitHubService:
                     break
 
                 for item in data:
-                    repo = item.get("repo", item)
-                    starred_at_str = item.get("starred_at")
+                    # Depending on Accept header, might be wrapped in 'repo'
+                    repo = item.get("repo", item) if isinstance(item, dict) else item
+                    starred_at_str = item.get("starred_at") if isinstance(item, dict) else None
 
                     # 增量同步：跳过 starred_at 早于 since 的仓库
                     if since and starred_at_str:
@@ -76,12 +80,16 @@ class GitHubService:
                             "url": repo.get("html_url", ""),
                             "homepage": repo.get("homepage") or "",
                             "topics": repo.get("topics", []),
-                            "updated_at": repo.get("pushed_at"),
+                            "updated_at": repo.get("updated_at"), # Use updated_at explicitly
                             "starred_at": starred_at_str,
                         }
                     )
 
                 logger.info(f"Fetched page {page}, got {len(data)} repos")
+                
+                if len(data) < per_page:
+                    break
+                    
                 page += 1
 
         logger.info(f"Total starred repos fetched: {len(all_repos)}")

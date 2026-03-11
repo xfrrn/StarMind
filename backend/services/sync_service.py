@@ -30,7 +30,14 @@ def _relative_time(dt: datetime | None) -> str:
     """Convert a datetime to a human-readable relative time string."""
     if not dt:
         return "Unknown"
-    now = datetime.utcnow()
+    
+    # dt might be offset-aware (e.g. from GitHub API) or offset-naive (e.g. from DB)
+    if dt.tzinfo:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+    else:
+        now = datetime.utcnow()
+        
     diff = now - dt
     seconds = int(diff.total_seconds())
     if seconds < 60:
