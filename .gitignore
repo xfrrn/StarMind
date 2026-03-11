@@ -1,9 +1,21 @@
-# Python
+# =========================
+# OS & IDE
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# =========================
+# Python / Backend
+# =========================
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
-dist/
-build/
 .eggs/
 *.egg
 
@@ -11,27 +23,41 @@ build/
 .venv/
 venv/
 env/
-
-# Environment variables
-.env
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Node
-frontend/node_modules/
-frontend/dist/
-
-# UV
 .python-version
+uv.lock
+
+# Build & Dist
+build/
+backend/build/
+backend/dist/
+*.pyc
 
 # Database
 *.db
 *.sqlite3
+
+# =========================
+# Node / Frontend
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.eslintcache
+frontend/coverage/
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# =========================
+# Docker
+# =========================
+.dockerignore
+pgdata/
