@@ -1,0 +1,180 @@
+import React, { useState } from 'react';
+import { Search, Sparkles, MessageSquare } from 'lucide-react';
+import { RepoCard } from '../components/RepoCard';
+import { chatSearch, type ChatResponse } from '../api';
+import { motion, AnimatePresence } from 'motion/react';
+import type { Repository } from '../data';
+
+export function SearchPage() {
+  const [query, setQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [answer, setAnswer] = useState('');
+  const [results, setResults] = useState<Repository[]>([]);
+  const [error, setError] = useState('');
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    setIsSearching(true);
+    setHasSearched(false);
+    setError('');
+
+    try {
+      const data: ChatResponse = await chatSearch(query);
+      setAnswer(data.answer);
+      setResults(data.repositories);
+      setHasSearched(true);
+    } catch (err: any) {
+      setError(err.message || 'Search failed');
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto py-12 px-6">
+      <div className="text-center mb-10">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl mb-3">
+          What are you looking for?
+        </h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-lg">
+          Ask questions to find the best projects from your starred repositories.
+        </p>
+      </div>
+
+      <div className="relative max-w-2xl mx-auto mb-16 shadow-sm dark:shadow-none">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-zinc-400" />
+        </div>
+        <form onSubmit={handleSearch}>
+          <input
+            type="text"
+            className="block w-full pl-12 pr-16 py-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg shadow-sm transition-all"
+            placeholder="Find a Python project for building a RAG system..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button
+            type="submit"
+            disabled={!query.trim() || isSearching}
+            className="absolute inset-y-2 right-2 flex items-center justify-center px-4 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {isSearching ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900 rounded-full animate-spin" />
+            ) : (
+              <span>Ask</span>
+            )}
+          </button>
+        </form>
+      </div>
+
+      <AnimatePresence>
+        {hasSearched && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+          >
+            {error ? (
+              <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-2xl p-6 mb-8 text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            ) : (
+              <>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl p-6 mb-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                      AI Summary
+                    </h2>
+                  </div>
+                  <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+                    {answer}
+                  </div>
+                </div>
+
+                {results.length > 0 && (
+                  <>
+                    <div className="mb-6 flex items-center justify-between">
+                      <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                        <LibraryIcon className="w-5 h-5 text-zinc-400" />
+                        Recommended Repositories
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {results.map((repo, i) => (
+                        <motion.div
+                          key={repo.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.2 + i * 0.1, duration: 0.4 }}
+                        >
+                          <RepoCard repo={repo} showAiReason />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!hasSearched && !isSearching && (
+        <div className="mt-20">
+          <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-6 text-center">
+            Suggested Queries
+          </h3>
+          <div className="flex flex-wrap justify-center gap-3">
+            {[
+              "React components with drag and drop",
+              "Lightweight database for Edge workers",
+              "Templates for a personal blog",
+              "Best Python API frameworks"
+            ].map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => {
+                  setQuery(suggestion);
+                  handleSearch({ preventDefault: () => { } } as React.FormEvent);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-sm text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LibraryIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="m16 6 4 14" />
+      <path d="M12 6v14" />
+      <path d="M8 8v12" />
+      <path d="M4 4v16" />
+    </svg>
+  );
+}
