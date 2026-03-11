@@ -84,21 +84,37 @@ export interface SyncStatusResponse {
     current_repo: string;
     total_stars: number;
     indexed_repos: number;
+    pending_repos: number;
     last_sync: string | null;
     logs: Array<{ status: string; time: string; details: string }>;
 }
 
-export async function triggerSync(): Promise<{ message: string; status: string }> {
-    const resp = await fetch(`${API_BASE}/sync`, { method: 'POST' });
-    if (!resp.ok) throw new Error(`Sync trigger failed: ${resp.statusText}`);
-    return resp.json();
+export interface SyncTriggerResponse {
+    message: string;
+    status: string;
 }
 
-export async function fetchSyncStatus(): Promise<SyncStatusResponse> {
-    const resp = await fetch(`${API_BASE}/sync/status`);
-    if (!resp.ok) throw new Error(`Sync status failed: ${resp.statusText}`);
-    return resp.json();
-}
+export const triggerSync = async (): Promise<SyncTriggerResponse> => {
+    const response = await fetch(`${API_BASE}/sync`, {
+        method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to trigger sync');
+    return response.json();
+};
+
+export const triggerAiAnalysis = async (): Promise<SyncTriggerResponse> => {
+    const response = await fetch(`${API_BASE}/sync/analyze`, {
+        method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to trigger AI analysis');
+    return response.json();
+};
+
+export const getSyncStatus = async (): Promise<SyncStatusResponse> => {
+    const response = await fetch(`${API_BASE}/sync/status`);
+    if (!response.ok) throw new Error('Failed to get sync status');
+    return response.json();
+};
 
 // ---- Settings ----
 

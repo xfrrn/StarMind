@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { triggerSync, fetchSyncStatus, type SyncStatusResponse } from '../api';
+import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle, Bot } from 'lucide-react';
+import { triggerSync, triggerAiAnalysis, getSyncStatus, type SyncStatusResponse } from '../api';
 
 export function SyncCenterPage() {
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
@@ -10,7 +10,7 @@ export function SyncCenterPage() {
 
   const loadStatus = useCallback(async () => {
     try {
-      const data = await fetchSyncStatus();
+      const data = await getSyncStatus();
       setStatus(data);
       setSyncing(data.is_syncing);
     } catch (err) {
@@ -22,10 +22,13 @@ export function SyncCenterPage() {
 
   useEffect(() => {
     loadStatus();
-    // Poll for status while syncing
-    const interval = setInterval(loadStatus, 3000);
-    return () => clearInterval(interval);
-  }, [loadStatus]);
+
+    // Only poll for status while actually syncing
+    if (syncing) {
+      const interval = setInterval(loadStatus, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [loadStatus, syncing]);
 
   const handleSync = async () => {
     try {
@@ -37,6 +40,20 @@ export function SyncCenterPage() {
       setTimeout(loadStatus, 1000);
     } catch (err: any) {
       setMessage(err.message || 'Sync failed');
+      setSyncing(false);
+    }
+  };
+
+  const handleAiAnalysis = async () => {
+    try {
+      setSyncing(true);
+      setMessage('');
+      const result = await triggerAiAnalysis();
+      setMessage(result.message);
+      // Start polling
+      setTimeout(loadStatus, 1000);
+    } catch (err: any) {
+      setMessage(err.message || 'AI Analysis failed');
       setSyncing(false);
     }
   };
@@ -78,22 +95,28 @@ export function SyncCenterPage() {
           </div>
         </div>
 
-        <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-6 md:p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
           <div className="bg-zinc-50 dark:bg-zinc-950 rounded-xl p-5 border border-zinc-100 dark:border-zinc-800/50">
             <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Stars</div>
             <div className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
               {status?.total_stars?.toLocaleString() || 0}
             </div>
           </div>
-          <div className="bg-zinc-50 dark:bg-zinc-950 rounded-xl p-5 border border-zinc-100 dark:border-zinc-800/50">
-            <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">Indexed Repos</div>
-            <div className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-5 border border-blue-100 dark:border-blue-900/30">
+            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Indexed Repos</div>
+            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
               {status?.indexed_repos?.toLocaleString() || 0}
+            </div>
+          </div>
+          <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-5 border border-amber-100 dark:border-amber-900/30">
+            <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">Pending Analysis</div>
+            <div className="text-3xl font-bold text-amber-700 dark:text-amber-300">
+              {status?.pending_repos?.toLocaleString() || 0}
             </div>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-5 border border-emerald-100 dark:border-emerald-900/30">
             <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Last Sync</div>
-            <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">
+            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
               {status?.last_sync || 'Never'}
             </div>
           </div>
@@ -106,12 +129,12 @@ export function SyncCenterPage() {
               <div className="flex items-center gap-3 mb-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Syncing... {status.progress}/{status.total}
+                  Processing... {status.progress}/{status.total}
                 </span>
               </div>
               {status.current_repo && (
                 <p className="text-xs text-blue-600 dark:text-blue-400 ml-7">
-                  Processing: {status.current_repo}
+                  Current: {status.current_repo}
                 </p>
               )}
               {status.total > 0 && (
@@ -133,18 +156,28 @@ export function SyncCenterPage() {
         )}
 
         <div className="p-6 md:p-8 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-            <RefreshCw className="w-4 h-4" />
-            <span>Click to sync your latest starred repositories</span>
+          <div className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <span><strong>1. Sync</strong> fetches latest repositories from GitHub.</span>
+            <span><strong>2. Analyze</strong> uses AI to categorize and summarize them.</span>
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Force Sync Now'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
+            >
+              <Github className="w-4 h-4" />
+              Fetch from GitHub
+            </button>
+            <button
+              onClick={handleAiAnalysis}
+              disabled={syncing || (status?.pending_repos === 0)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50"
+            >
+              <Bot className={`w-4 h-4 ${syncing ? 'animate-pulse' : ''}`} />
+              Run AI Analysis
+            </button>
+          </div>
         </div>
       </div>
 

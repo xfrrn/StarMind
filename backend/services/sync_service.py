@@ -109,20 +109,13 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
             readme = await github.fetch_readme(repo_data["name"])
             repo_data["readme"] = readme
 
-            # AI analysis
-            analysis = await ai_service.analyze_repository(repo_data)
-
-            # Build combined data for embedding
-            combined_data = {**repo_data, **analysis}
-            embedding = await ai_service.generate_repo_embedding(combined_data)
-
             # Parse updated_at
             updated_at = None
             if repo_data.get("updated_at"):
                 try:
-                    updated_at = datetime.fromisoformat(
-                        repo_data["updated_at"].replace("Z", "+00:00")
-                    )
+                    # Parse and convert to offset-naive UTC to match DB schema
+                    dt = datetime.fromisoformat(repo_data["updated_at"].replace("Z", "+00:00"))
+                    updated_at = dt.replace(tzinfo=None)
                 except (ValueError, AttributeError):
                     pass
 
@@ -130,9 +123,8 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
             starred_at = None
             if repo_data.get("starred_at"):
                 try:
-                    starred_at = datetime.fromisoformat(
-                        repo_data["starred_at"].replace("Z", "+00:00")
-                    )
+                    dt = datetime.fromisoformat(repo_data["starred_at"].replace("Z", "+00:00"))
+                    starred_at = dt.replace(tzinfo=None)
                 except (ValueError, AttributeError):
                     pass
 
@@ -148,17 +140,10 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
                 existing_repo.readme = readme
                 existing_repo.updated_at = updated_at
                 existing_repo.last_updated = _relative_time(updated_at)
-                existing_repo.tags = analysis.get("tags", [])
-                existing_repo.category = analysis.get("category", "Other")
-                existing_repo.ai_summary = analysis.get("ai_summary", "")
-                existing_repo.has_ui = analysis.get("has_ui", False)
-                existing_repo.has_api = analysis.get("has_api", False)
-                existing_repo.activity_level = analysis.get("activity_level", "Medium")
-                existing_repo.embedding = embedding
                 existing_repo.synced_at = datetime.utcnow()
                 updated_count += 1
             else:
-                # Insert new
+                # Insert new (without AI data initially)
                 new_repo = Repository(
                     github_id=repo_data["github_id"],
                     name=repo_data["name"],
@@ -166,12 +151,12 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
                     stars=repo_data["stars"],
                     language=repo_data["language"],
                     topics=repo_data.get("topics", []),
-                    tags=analysis.get("tags", []),
-                    category=analysis.get("category", "Other"),
-                    ai_summary=analysis.get("ai_summary", ""),
-                    has_ui=analysis.get("has_ui", False),
-                    has_api=analysis.get("has_api", False),
-                    activity_level=analysis.get("activity_level", "Medium"),
+                    tags=[],
+                    category="Pending Analysis",
+                    ai_summary="",
+                    has_ui=False,
+                    has_api=False,
+                    activity_level="Medium",
                     last_updated=_relative_time(updated_at),
                     updated_at=updated_at,
                     readme=readme,
@@ -179,17 +164,14 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
                     homepage=repo_data.get("homepage", ""),
                     starred_at=starred_at,
                     synced_at=datetime.utcnow(),
-                    embedding=embedding,
+                    embedding=None,
                 )
                 db.add(new_repo)
                 new_count += 1
 
-            # 每 10 个仓库 commit 一次避免长事务
-            if (i + 1) % 10 == 0:
+            # 每 100 个仓库 commit 一次避免长事务
+            if (i + 1) % 100 == 0:
                 await db.commit()
-
-            # 避免 API 速率限制
-            await asyncio.sleep(0.5)
 
         await db.commit()
 
@@ -213,3 +195,85 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
         await db.commit()
 
     return log
+
+
+async def run_ai_analysis(db: AsyncSession) -> dict:
+    """Run AI analysis only on repositories that need it (Pending Analysis)."""
+    global _sync_status
+
+    if _sync_status["is_syncing"]:
+        raise RuntimeError("A sync or analysis is already in progress")
+
+    # Count how many need analysis
+    result = await db.execute(
+        select(Repository).where(Repository.category == "Pending Analysis")
+    )
+    pending_repos = result.scalars().all()
+    
+    total_pending = len(pending_repos)
+    if total_pending == 0:
+        return {"message": "No repositories pending AI analysis", "processed": 0}
+
+    _sync_status = {
+        "is_syncing": True,
+        "progress": 0,
+        "total": total_pending,
+        "current_repo": "",
+    }
+
+    processed_count = 0
+
+    try:
+        for i, repo in enumerate(pending_repos):
+            _sync_status["progress"] = i + 1
+            _sync_status["current_repo"] = repo.name
+
+            # Build data dict for AI service
+            repo_data = {
+                "name": repo.name,
+                "description": repo.description,
+                "readme": repo.readme,
+                "language": repo.language,
+                "topics": repo.topics,
+            }
+
+            try:
+                # 1) Analyze repo (tags, category, summary, etc.)
+                analysis = await ai_service.analyze_repository(repo_data)
+
+                # 2) Generate embedding
+                combined_data = {**repo_data, **analysis}
+                embedding = await ai_service.generate_repo_embedding(combined_data)
+
+                # 3) Update DB object
+                repo.tags = analysis.get("tags", [])
+                repo.category = analysis.get("category", "Other")
+                repo.ai_summary = analysis.get("ai_summary", "")
+                repo.has_ui = analysis.get("has_ui", False)
+                repo.has_api = analysis.get("has_api", False)
+                repo.activity_level = analysis.get("activity_level", "Medium")
+                repo.embedding = embedding
+
+                processed_count += 1
+
+                # Commit every 5 repos
+                if processed_count % 5 == 0:
+                    await db.commit()
+
+            except Exception as e:
+                logger.error(f"Failed AI analysis for {repo.name}: {e}")
+                # Continue with next so one bad repo doesn't stop the whole batch
+                
+            # Rate limiting sleep
+            await asyncio.sleep(0.5)
+
+        await db.commit()
+    
+    finally:
+        _sync_status["is_syncing"] = False
+
+    return {
+        "message": f"Successfully analyzed {processed_count} out of {total_pending} pending repositories.",
+        "processed": processed_count,
+        "total_pending": total_pending
+    }
