@@ -22,15 +22,7 @@ StarMind/
 - OpenAI API key
 - GitHub Personal Access Token
 
-### 1. Database Setup
-
-```sql
-CREATE DATABASE starmind;
-\c starmind
-CREATE EXTENSION vector;
-```
-
-### 2. Backend
+### 1. Backend
 
 ```bash
 cd backend
@@ -42,11 +34,11 @@ cp .env.example .env
 # Install dependencies
 uv sync
 
-# Start the server
+# Start the server (database & tables are auto-created on startup)
 uv run uvicorn main:app --reload --port 8000
 ```
 
-API docs available at: http://localhost:8000/docs
+> **Note**: The backend will automatically create the database, enable pgvector extension, and create all required tables on startup. Just make sure PostgreSQL is running and the user in `DATABASE_URL` has permission to create databases.
 
 ### 3. Frontend
 
