@@ -76,11 +76,13 @@ class AnalysisService:
                         "name": repo.name,
                         "description": repo.description,
                         "readme": repo.readme,
-                        "readme_for_analysis": self.readme_cleaner.clean_for_analysis(
+                        "readme_for_analysis": repo.readme_for_analysis
+                        or self.readme_cleaner.clean_for_analysis(
                             repo.readme or "",
                             max_tokens=1200,
                         ),
-                        "readme_for_embedding": self.readme_cleaner.clean_for_embedding(
+                        "readme_for_embedding": repo.readme_for_embedding
+                        or self.readme_cleaner.clean_for_embedding(
                             repo.readme or "",
                             max_tokens=int(self.settings.embedding_readme_max_tokens),
                         ),
@@ -112,6 +114,8 @@ class AnalysisService:
                             "ok": True,
                             "analysis": analysis,
                             "dual_embeddings": dual_embeddings,
+                            "cleaned_analysis_text": repo_data.get("readme_for_analysis", ""),
+                            "cleaned_embedding_text": repo_data.get("readme_for_embedding", ""),
                         }
                     except Exception as e:
                         logger.error("Failed AI analysis for %s: %s", repo_data["name"], e)
@@ -153,6 +157,8 @@ class AnalysisService:
                 dual_embeddings = result_item["dual_embeddings"]
                 metadata_embedding = dual_embeddings.get("repo_metadata_embedding")
                 readme_embedding = dual_embeddings.get("readme_embedding")
+                cleaned_analysis_text = str(result_item.get("cleaned_analysis_text", ""))
+                cleaned_embedding_text = str(result_item.get("cleaned_embedding_text", ""))
 
                 if metadata_embedding is not None and len(metadata_embedding) != self.expected_embedding_dim:
                     logger.error(
@@ -192,6 +198,9 @@ class AnalysisService:
                 repo.has_ui = analysis.get("has_ui", False)
                 repo.has_api = analysis.get("has_api", False)
                 repo.activity_level = analysis.get("activity_level", "Medium")
+                repo.readme_for_analysis = cleaned_analysis_text
+                repo.readme_for_embedding = cleaned_embedding_text
+                repo.cleaning_version = "v1"
                 repo.embedding = metadata_embedding
                 repo.repo_metadata_embedding = metadata_embedding
                 repo.readme_embedding = readme_embedding

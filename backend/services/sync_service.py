@@ -10,6 +10,7 @@ from config import Settings
 from core.github import GitHubSyncer
 from models.repository import Repository, SyncLog
 from services.analysis_service import AnalysisService
+from services.readme_cleaner import ReadmeCleaner
 from services.sync_runtime_state import SyncRuntimeState
 from utils.response_utils import to_sync_log_item
 from utils.time_utils import format_last_sync_time, format_relative_time, parse_iso_to_naive_utc
@@ -23,10 +24,12 @@ class SyncService:
         settings: Settings,
         runtime_state: SyncRuntimeState,
         analysis_service: AnalysisService,
+        readme_cleaner: ReadmeCleaner | None = None,
     ):
         self.settings = settings
         self.runtime_state = runtime_state
         self.analysis_service = analysis_service
+        self.readme_cleaner = readme_cleaner or ReadmeCleaner()
 
     async def run_sync(self, db: AsyncSession, github_token: str) -> SyncLog:
         if self.runtime_state.get_sync_status()["is_syncing"]:
@@ -73,6 +76,11 @@ class SyncService:
                 existing_repo = existing.scalar_one_or_none()
 
                 readme = readme_map.get(repo_data["name"], "")
+                readme_for_analysis = self.readme_cleaner.clean_for_analysis(readme, max_tokens=1200)
+                readme_for_embedding = self.readme_cleaner.clean_for_embedding(
+                    readme,
+                    max_tokens=int(self.settings.embedding_readme_max_tokens),
+                )
                 updated_at = parse_iso_to_naive_utc(repo_data.get("updated_at"))
                 starred_at = parse_iso_to_naive_utc(repo_data.get("starred_at"))
 
@@ -85,9 +93,25 @@ class SyncService:
                     existing_repo.url = repo_data["url"]
                     existing_repo.homepage = repo_data.get("homepage", "")
                     existing_repo.readme = readme
+                    existing_repo.readme_for_analysis = readme_for_analysis
+                    existing_repo.readme_for_embedding = readme_for_embedding
+                    existing_repo.cleaning_version = "v1"
                     existing_repo.updated_at = updated_at
                     existing_repo.last_updated = format_relative_time(updated_at)
                     existing_repo.synced_at = datetime.utcnow()
+                    existing_repo.category = "Pending Analysis"
+                    existing_repo.tags = []
+                    existing_repo.ai_summary = ""
+                    existing_repo.has_ui = False
+                    existing_repo.has_api = False
+                    existing_repo.activity_level = "Medium"
+                    existing_repo.embedding = None
+                    existing_repo.repo_metadata_embedding = None
+                    existing_repo.readme_embedding = None
+                    existing_repo.metadata_hash = ""
+                    existing_repo.readme_hash = ""
+                    existing_repo.embedding_version = ""
+                    existing_repo.embedding_updated_at = None
                     updated_count += 1
                 else:
                     db.add(
@@ -107,6 +131,9 @@ class SyncService:
                             last_updated=format_relative_time(updated_at),
                             updated_at=updated_at,
                             readme=readme,
+                            readme_for_analysis=readme_for_analysis,
+                            readme_for_embedding=readme_for_embedding,
+                            cleaning_version="v1",
                             url=repo_data["url"],
                             homepage=repo_data.get("homepage", ""),
                             starred_at=starred_at,

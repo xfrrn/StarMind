@@ -53,7 +53,7 @@ async def _ensure_database_exists():
         logger.warning("Could not auto-create database: %s", e)
 
 
-async def _ensure_embedding_dimension():
+async def _ensure_repository_columns_and_embedding_dimension():
     expected_dim = int(settings.embedding_dimension)
     expected_type = f"vector({expected_dim})"
     vector_columns = [
@@ -63,11 +63,14 @@ async def _ensure_embedding_dimension():
     ]
 
     async with engine.begin() as conn:
-        # Ensure new columns exist for dual-embedding pipeline.
+        # Ensure evolving columns exist for analysis/embedding pipeline.
         await conn.execute(
             text(
                 f"""
                 ALTER TABLE repositories
+                ADD COLUMN IF NOT EXISTS readme_for_analysis text DEFAULT '',
+                ADD COLUMN IF NOT EXISTS readme_for_embedding text DEFAULT '',
+                ADD COLUMN IF NOT EXISTS cleaning_version varchar(20) DEFAULT 'v1',
                 ADD COLUMN IF NOT EXISTS repo_metadata_embedding vector({expected_dim}),
                 ADD COLUMN IF NOT EXISTS readme_embedding vector({expected_dim}),
                 ADD COLUMN IF NOT EXISTS metadata_hash varchar(64) DEFAULT '',
@@ -122,5 +125,5 @@ async def init_db():
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
 
-    await _ensure_embedding_dimension()
+    await _ensure_repository_columns_and_embedding_dimension()
     logger.info("Database tables verified/created")

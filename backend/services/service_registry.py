@@ -33,6 +33,7 @@ sync_service = SyncService(
     settings=settings,
     runtime_state=runtime_state,
     analysis_service=analysis_service,
+    readme_cleaner=readme_cleaner,
 )
 chat_service = ChatService(search_service=search_service, chat_responder=chat_responder)
 repository_service = RepositoryService(settings)
