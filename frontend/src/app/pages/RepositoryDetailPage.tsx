@@ -1,9 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router';
 import { ArrowLeft, Star, GitFork, Eye, Globe, Github, Terminal, Activity, FileText } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
 import { fetchRepository } from '../api';
 import type { Repository } from '../data';
+
+function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): string {
+  if (!url) return url;
+  if (/^(https?:|mailto:|tel:|#)/i.test(url)) return url;
+
+  const normalizedRepoUrl = repoUrl.replace(/\/+$/, '');
+  const cleanedPath = url.replace(/^\.?\//, '');
+
+  // Absolute path from repo root
+  if (url.startsWith('/')) {
+    return isImage
+      ? `${normalizedRepoUrl}/raw/HEAD${url}`
+      : `${normalizedRepoUrl}/blob/HEAD${url}`;
+  }
+
+  return isImage
+    ? `${normalizedRepoUrl}/raw/HEAD/${cleanedPath}`
+    : `${normalizedRepoUrl}/blob/HEAD/${cleanedPath}`;
+}
 
 export function RepositoryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -120,10 +142,18 @@ export function RepositoryDetailPage() {
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">README.md</h3>
             </div>
             <div className="p-6 md:p-8">
-              <div className="prose prose-zinc dark:prose-invert max-w-none">
-                <pre className="whitespace-pre-wrap font-mono text-sm text-zinc-700 dark:text-zinc-300 bg-transparent p-0 m-0 border-0">
-                  {repo.readme || "No README available."}
-                </pre>
+              <div className="markdown-body github-readme-body">
+                {repo.readme ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    urlTransform={(url, key) => resolveReadmeUrl(url, repo.url, key === 'src')}
+                  >
+                    {repo.readme}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-zinc-500 dark:text-zinc-400 italic">No README available.</p>
+                )}
               </div>
             </div>
           </section>

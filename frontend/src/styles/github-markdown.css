@@ -1,0 +1,28 @@
+@import "github-markdown-css/github-markdown.css";
+
+.github-readme-body {
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.github-readme-body img {
+  border-radius: 0;
+}
+
+/* Keep badge-style images inline like GitHub README rendering. */
+.github-readme-body p img,
+.github-readme-body a img {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.github-readme-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+}
