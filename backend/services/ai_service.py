@@ -13,7 +13,9 @@ from services.service_registry import (
     embedding_service,
     repository_analyzer,
 )
-from utils.text import clean_readme_markdown, truncate_by_tokens
+from services.readme_cleaner import ReadmeCleaner
+
+_readme_cleaner = ReadmeCleaner()
 
 
 async def analyze_repository(repo_data: dict) -> dict:
@@ -49,8 +51,10 @@ async def chat_with_repos(query: str, repos: list[dict]) -> str:
 
 
 def clean_readme_for_embedding(raw_readme: str) -> str:
-    cleaned = clean_readme_markdown(raw_readme)
-    return truncate_by_tokens(cleaned, int(get_repository_service().settings.embedding_readme_max_tokens))
+    return _readme_cleaner.clean_for_embedding(
+        raw_readme,
+        max_tokens=int(get_repository_service().settings.embedding_readme_max_tokens),
+    )
 
 
 __all__ = [

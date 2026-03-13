@@ -10,6 +10,7 @@ from typing import Any
 from config import Settings
 from core.llm.client import LLMClient
 from core.llm.prompts import ANALYZE_REPOSITORY_PROMPT
+from utils.text import truncate_by_tokens
 from utils.json_utils import parse_json_object_with_repair
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,8 @@ class RepositoryAnalyzer:
         }
 
     async def analyze_repository(self, repo_data: dict[str, Any]) -> dict[str, Any]:
-        readme_excerpt = (repo_data.get("readme") or "")[:3000]
+        readme_for_analysis = repo_data.get("readme_for_analysis") or repo_data.get("readme") or ""
+        readme_excerpt = truncate_by_tokens(str(readme_for_analysis), 1200)
 
         prompt = ANALYZE_REPOSITORY_PROMPT.format(
             name=repo_data.get("name", ""),

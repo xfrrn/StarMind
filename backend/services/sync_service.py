@@ -165,7 +165,14 @@ class SyncService:
         indexed_repos = indexed_result.scalar() or 0
 
         pending_result = await db.execute(
-            select(func.count(Repository.id)).where(Repository.category == "Pending Analysis")
+            select(func.count(Repository.id)).where(
+                or_(
+                    Repository.category == "Pending Analysis",
+                    Repository.repo_metadata_embedding.is_(None),
+                    Repository.readme_embedding.is_(None),
+                    Repository.embedding_version != self.settings.embedding_version,
+                )
+            )
         )
         pending_repos = pending_result.scalar() or 0
 

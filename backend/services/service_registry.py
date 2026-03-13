@@ -6,6 +6,7 @@ from core.llm import LLMClient
 from core.retrieval import EmbeddingService, RepositorySearchService
 from services.analysis_service import AnalysisService
 from services.chat_service import ChatService
+from services.readme_cleaner import ReadmeCleaner
 from services.repository_service import RepositoryService
 from services.settings_service import SettingsService
 from services.sync_runtime_state import SyncRuntimeState
@@ -19,12 +20,14 @@ search_service = RepositorySearchService(settings, embedding_service)
 repository_analyzer = RepositoryAnalyzer(settings, llm_client)
 chat_responder = ChatResponder(llm_client)
 runtime_state = SyncRuntimeState()
+readme_cleaner = ReadmeCleaner()
 
 analysis_service = AnalysisService(
     settings=settings,
     runtime_state=runtime_state,
     repository_analyzer=repository_analyzer,
     embedding_service=embedding_service,
+    readme_cleaner=readme_cleaner,
 )
 sync_service = SyncService(
     settings=settings,

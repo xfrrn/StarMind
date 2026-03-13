@@ -32,7 +32,9 @@ class EmbeddingService:
         return truncate_by_tokens(merged, int(self.settings.embedding_readme_max_tokens))
 
     def build_repository_readme_text(self, repo: dict[str, Any]) -> str:
-        cleaned = clean_readme_markdown(repo.get("readme", ""))
+        cleaned = repo.get("readme_for_embedding", "")
+        if not cleaned:
+            cleaned = clean_readme_markdown(repo.get("readme", ""))
         return truncate_by_tokens(cleaned, int(self.settings.embedding_readme_max_tokens))
 
     def build_legacy_embedding_text(self, repo: dict[str, Any]) -> str:

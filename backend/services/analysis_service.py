@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
@@ -13,6 +13,7 @@ from core.analysis import RepositoryAnalyzer
 from core.github.checkpoint import commit_when_reach_checkpoint
 from core.retrieval import EmbeddingService
 from models.repository import Repository, SyncLog
+from services.readme_cleaner import ReadmeCleaner
 from services.sync_runtime_state import SyncRuntimeState
 
 logger = logging.getLogger(__name__)
@@ -25,11 +26,13 @@ class AnalysisService:
         runtime_state: SyncRuntimeState,
         repository_analyzer: RepositoryAnalyzer,
         embedding_service: EmbeddingService,
+        readme_cleaner: ReadmeCleaner | None = None,
     ):
         self.settings = settings
         self.runtime_state = runtime_state
         self.repository_analyzer = repository_analyzer
         self.embedding_service = embedding_service
+        self.readme_cleaner = readme_cleaner or ReadmeCleaner()
         self.expected_embedding_dim = int(settings.embedding_dimension)
 
     async def run_pending_repository_analysis(self, db: AsyncSession) -> dict:
@@ -37,7 +40,14 @@ class AnalysisService:
             raise RuntimeError("A sync or analysis is already in progress")
 
         result = await db.execute(
-            select(Repository).where(Repository.category == "Pending Analysis")
+            select(Repository).where(
+                or_(
+                    Repository.category == "Pending Analysis",
+                    Repository.repo_metadata_embedding.is_(None),
+                    Repository.readme_embedding.is_(None),
+                    Repository.embedding_version != self.settings.embedding_version,
+                )
+            )
         )
         pending_repos = result.scalars().all()
 
@@ -66,6 +76,14 @@ class AnalysisService:
                         "name": repo.name,
                         "description": repo.description,
                         "readme": repo.readme,
+                        "readme_for_analysis": self.readme_cleaner.clean_for_analysis(
+                            repo.readme or "",
+                            max_tokens=1200,
+                        ),
+                        "readme_for_embedding": self.readme_cleaner.clean_for_embedding(
+                            repo.readme or "",
+                            max_tokens=int(self.settings.embedding_readme_max_tokens),
+                        ),
                         "language": repo.language,
                         "topics": repo.topics,
                         "stars": repo.stars,

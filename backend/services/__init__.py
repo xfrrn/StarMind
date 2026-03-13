@@ -1,5 +1,6 @@
 from .analysis_service import AnalysisService
 from .chat_service import ChatService
+from .readme_cleaner import ReadmeCleaner
 from .repository_service import RepositoryService
 from .service_registry import (
     get_analysis_service,
@@ -15,6 +16,7 @@ from .sync_service import SyncService
 __all__ = [
     "AnalysisService",
     "ChatService",
+    "ReadmeCleaner",
     "RepositoryService",
     "SettingsService",
     "SyncRuntimeState",
