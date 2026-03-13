@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
 from models.repository import Repository
+from config import get_settings
+from services.github_service import GitHubService
 
 router = APIRouter(prefix="/api", tags=["repositories"])
 
@@ -127,6 +129,16 @@ async def get_repository(repo_id: int, db: AsyncSession = Depends(get_db)):
 
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Backfill old truncated README records from earlier sync logic.
+    if repo.readme and repo.readme.endswith("\n\n...(truncated)"):
+        settings = get_settings()
+        if settings.github_token:
+            github = GitHubService(settings.github_token)
+            fresh_readme = await github.fetch_readme(repo.name)
+            if fresh_readme:
+                repo.readme = fresh_readme
+                await db.commit()
 
     return RepoOut(
         id=str(repo.id),

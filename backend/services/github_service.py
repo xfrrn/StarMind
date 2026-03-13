@@ -111,8 +111,6 @@ class GitHubService:
                 resp.raise_for_status()
                 content = resp.text
                 # 截断过长的 README（保留前 8000 字符）
-                if len(content) > 8000:
-                    content = content[:8000] + "\n\n...(truncated)"
                 return content
             except Exception as e:
                 logger.warning(f"Failed to fetch README for {full_name}: {e}")
