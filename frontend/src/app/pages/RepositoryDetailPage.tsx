@@ -60,7 +60,7 @@ export function RepositoryDetailPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-6 lg:px-8 bg-white dark:bg-zinc-950">
+    <div className="w-full max-w-[1520px] mx-auto py-8 px-6 xl:px-10 bg-white dark:bg-zinc-950">
       <div className="mb-6 flex items-center gap-4">
         <Link
           to="/repositories"
@@ -115,8 +115,8 @@ export function RepositoryDetailPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 space-y-10">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+        <div className="lg:col-span-3 space-y-10">
           {/* AI Summary Section */}
           <section className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-2xl p-6 md:p-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
