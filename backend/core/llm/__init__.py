@@ -1,10 +1,8 @@
-from .client import client, create_chat_completion, create_embedding
+from .client import LLMClient
 from .prompts import ANALYZE_REPOSITORY_PROMPT, CHAT_RESPONSE_PROMPT
 
 __all__ = [
-    "client",
-    "create_chat_completion",
-    "create_embedding",
+    "LLMClient",
     "ANALYZE_REPOSITORY_PROMPT",
     "CHAT_RESPONSE_PROMPT",
 ]

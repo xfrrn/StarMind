@@ -7,11 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
 from routers.schemas import RepoListResponse, RepoOut, StatsResponse
-from services.repository_service import (
-    get_repository_detail,
-    get_repository_stats,
-    list_repositories as list_repositories_service,
-)
+from services.service_registry import get_repository_service
 
 router = APIRouter(prefix="/api", tags=["repositories"])
 
@@ -29,7 +25,8 @@ async def list_repositories(
     db: AsyncSession = Depends(get_db),
 ):
     """List repositories with filtering and pagination."""
-    return await list_repositories_service(
+    service = get_repository_service()
+    return await service.list_repositories(
         db,
         page=page,
         limit=limit,
@@ -45,7 +42,8 @@ async def list_repositories(
 @router.get("/repositories/{repo_id}", response_model=RepoOut)
 async def get_repository(repo_id: int, db: AsyncSession = Depends(get_db)):
     """Get a single repository by ID."""
-    repo = await get_repository_detail(db, repo_id)
+    service = get_repository_service()
+    repo = await service.get_repository_detail(db, repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
     return repo
@@ -54,4 +52,5 @@ async def get_repository(repo_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(db: AsyncSession = Depends(get_db)):
     """Get statistics about synced repositories."""
-    return await get_repository_stats(db)
+    service = get_repository_service()
+    return await service.get_repository_stats(db)
