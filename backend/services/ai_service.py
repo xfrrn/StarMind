@@ -5,6 +5,11 @@ Uses OpenAI API for repository analysis, embedding generation, and chat.
 
 import json
 import logging
+import hashlib
+import re
+import asyncio
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import json_repair
@@ -58,6 +63,82 @@ Based on these repositories, provide a helpful, concise answer to the user's que
 
 Respond in the same language as the user's query. Use markdown formatting for readability.
 """
+
+_parse_failure_lock = asyncio.Lock()
+_parse_failure_file = (
+    Path(__file__).resolve().parents[1] / "logs" / "ai_analysis_parse_failures.jsonl"
+)
+
+
+async def _save_parse_failure(
+    *,
+    repo_name: str,
+    stage: str,
+    attempt: int,
+    raw_content: str,
+):
+    cleaned = _clean_json_text(raw_content)
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "repo": repo_name,
+        "stage": stage,
+        "attempt": attempt,
+        "model": settings.openai_model,
+        "raw_length": len(raw_content or ""),
+        "cleaned_length": len(cleaned or ""),
+        "raw_content": raw_content or "",
+        "cleaned_content": cleaned or "",
+    }
+    _parse_failure_file.parent.mkdir(parents=True, exist_ok=True)
+    async with _parse_failure_lock:
+        with _parse_failure_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _truncate_by_tokens(text: str, max_tokens: int) -> str:
+    if max_tokens <= 0:
+        return ""
+    tokens = text.split()
+    if len(tokens) <= max_tokens:
+        return text
+    return " ".join(tokens[:max_tokens])
+
+
+def clean_readme_for_embedding(raw_readme: str) -> str:
+    text = raw_readme or ""
+    if not text:
+        return ""
+
+    text = re.sub(r"```[\s\S]*?```", " ", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"^[#>\-\*\+\d\.\s]+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return _truncate_by_tokens(text, int(settings.embedding_readme_max_tokens))
+
+
+def build_metadata_text(repo: dict[str, Any]) -> str:
+    summary = _truncate_by_tokens(
+        str(repo.get("ai_summary", "")),
+        int(settings.embedding_summary_max_tokens),
+    )
+    parts = [
+        str(repo.get("name", "")),
+        str(repo.get("description", "")),
+        " ".join(repo.get("topics", []) or []),
+        " ".join(repo.get("tags", []) or []),
+        summary,
+    ]
+    merged = " ".join(part for part in parts if part).strip()
+    return _truncate_by_tokens(merged, int(settings.embedding_readme_max_tokens))
+
+
+def _hash_text(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
 def _clean_json_text(content: str) -> str:
@@ -168,6 +249,12 @@ async def analyze_repository(repo_data: dict[str, Any]) -> dict[str, Any]:
             if result is not None:
                 return _normalize_analysis_result(result)
             bad_content = content
+            await _save_parse_failure(
+                repo_name=repo_data.get("name", "unknown"),
+                stage="analysis_parse",
+                attempt=attempt + 1,
+                raw_content=content,
+            )
             logger.warning(
                 f"AI analysis JSON parse failed for {repo_data.get('name')}, attempt {attempt + 1}"
             )
@@ -201,6 +288,12 @@ async def analyze_repository(repo_data: dict[str, Any]) -> dict[str, Any]:
             parsed_repaired = _parse_analysis_json(repaired)
             if parsed_repaired is not None:
                 return _normalize_analysis_result(parsed_repaired)
+            await _save_parse_failure(
+                repo_name=repo_data.get("name", "unknown"),
+                stage="repair_parse",
+                attempt=1,
+                raw_content=repaired,
+            )
         except Exception as e:
             logger.warning(
                 f"AI analysis JSON repair failed for {repo_data.get('name')}: {e}"
@@ -240,17 +333,10 @@ async def generate_embedding(text_content: str) -> list[float]:
 
 
 def _build_embedding_text(repo: dict[str, Any]) -> str:
-    """Build a text representation of a repository for embedding."""
-    parts = [
-        repo.get("name", ""),
-        repo.get("description", ""),
-        repo.get("language", ""),
-        " ".join(repo.get("tags", [])),
-        repo.get("category", ""),
-        repo.get("ai_summary", ""),
-        (repo.get("readme") or "")[:2000],
-    ]
-    return " ".join(filter(None, parts))
+    """Legacy single-embedding input (kept for compatibility)."""
+    metadata_text = build_metadata_text(repo)
+    readme_text = clean_readme_for_embedding(repo.get("readme", ""))
+    return " ".join(part for part in [metadata_text, readme_text] if part)
 
 
 async def generate_repo_embedding(repo: dict[str, Any]) -> list[float]:
@@ -259,28 +345,59 @@ async def generate_repo_embedding(repo: dict[str, Any]) -> list[float]:
     return await generate_embedding(text_content)
 
 
+async def generate_dual_embeddings(repo: dict[str, Any]) -> dict[str, Any]:
+    metadata_text = build_metadata_text(repo)
+    readme_text = clean_readme_for_embedding(repo.get("readme", ""))
+
+    repo_metadata_embedding = None
+    readme_embedding = None
+    if metadata_text:
+        repo_metadata_embedding = await generate_embedding(metadata_text)
+    if readme_text:
+        readme_embedding = await generate_embedding(readme_text)
+
+    return {
+        "metadata_text": metadata_text,
+        "readme_text": readme_text,
+        "metadata_hash": _hash_text(metadata_text),
+        "readme_hash": _hash_text(readme_text),
+        "repo_metadata_embedding": repo_metadata_embedding,
+        "readme_embedding": readme_embedding,
+    }
+
+
 async def semantic_search(
     db: AsyncSession, query: str, top_k: int = 5
 ) -> list[dict[str, Any]]:
-    """Search repositories by semantic similarity using pgvector."""
+    """Search repositories by weighted dual-embedding similarity."""
     query_embedding = await generate_embedding(query)
+    metadata_weight = float(settings.embedding_metadata_weight)
+    readme_weight = float(settings.embedding_readme_weight)
 
     sql = text(
         """
         SELECT id, github_id, name, description, stars, language,
                tags, category, ai_summary, has_ui, has_api,
                activity_level, last_updated, readme, url, homepage,
-               embedding <=> :query_embedding AS distance
+               COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) AS metadata_distance,
+               COALESCE(readme_embedding <=> :query_embedding, 2.0) AS readme_distance,
+               (:metadata_weight * COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) +
+                :readme_weight * COALESCE(readme_embedding <=> :query_embedding, 2.0)) AS distance
         FROM repositories
-        WHERE embedding IS NOT NULL
-        ORDER BY embedding <=> :query_embedding
+        WHERE repo_metadata_embedding IS NOT NULL OR readme_embedding IS NOT NULL
+        ORDER BY distance
         LIMIT :top_k
     """
     )
 
     result = await db.execute(
         sql,
-        {"query_embedding": str(query_embedding), "top_k": top_k},
+        {
+            "query_embedding": str(query_embedding),
+            "top_k": top_k,
+            "metadata_weight": metadata_weight,
+            "readme_weight": readme_weight,
+        },
     )
     rows = result.mappings().all()
 

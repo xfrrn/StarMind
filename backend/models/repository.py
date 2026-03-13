@@ -42,7 +42,14 @@ class Repository(Base):
     homepage = Column(Text, default="")
     starred_at = Column(DateTime, default=None)
     synced_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # Legacy single embedding kept for backward compatibility.
     embedding = Column(Vector(EMBEDDING_DIM))
+    repo_metadata_embedding = Column(Vector(EMBEDDING_DIM), default=None)
+    readme_embedding = Column(Vector(EMBEDDING_DIM), default=None)
+    metadata_hash = Column(String(64), default="")
+    readme_hash = Column(String(64), default="")
+    embedding_version = Column(String(20), default="")
+    embedding_updated_at = Column(DateTime, default=None)
 
     __table_args__ = (
         Index("ix_repositories_language", "language"),

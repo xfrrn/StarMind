@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, BackgroundTasks
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db, async_session
@@ -108,7 +108,13 @@ async def sync_status(db: AsyncSession = Depends(get_db)):
 
     # Get indexed repos count (those with embeddings)
     indexed_result = await db.execute(
-        select(func.count(Repository.id)).where(Repository.embedding.isnot(None))
+        select(func.count(Repository.id)).where(
+            or_(
+                Repository.repo_metadata_embedding.isnot(None),
+                Repository.readme_embedding.isnot(None),
+                Repository.embedding.isnot(None),
+            )
+        )
     )
     indexed_repos = indexed_result.scalar() or 0
 

@@ -280,12 +280,12 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
                 try:
                     analysis = await ai_service.analyze_repository(repo_data)
                     combined_data = {**repo_data, **analysis}
-                    embedding = await ai_service.generate_repo_embedding(combined_data)
+                    dual_embeddings = await ai_service.generate_dual_embeddings(combined_data)
                     return {
                         "id": repo_data["id"],
                         "ok": True,
                         "analysis": analysis,
-                        "embedding": embedding,
+                        "dual_embeddings": dual_embeddings,
                     }
                 except Exception as e:
                     logger.error(f"Failed AI analysis for {repo_data['name']}: {e}")
@@ -325,13 +325,35 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
                 continue
 
             analysis = result_item["analysis"]
-            embedding = result_item["embedding"]
-            if len(embedding) != EXPECTED_EMBEDDING_DIM:
+            dual_embeddings = result_item["dual_embeddings"]
+            metadata_embedding = dual_embeddings.get("repo_metadata_embedding")
+            readme_embedding = dual_embeddings.get("readme_embedding")
+
+            if metadata_embedding is not None and len(metadata_embedding) != EXPECTED_EMBEDDING_DIM:
                 logger.error(
-                    "Skip repository %s due to embedding dimension mismatch (expected %s, got %s).",
+                    "Skip repository %s due to metadata embedding dimension mismatch (expected %s, got %s).",
                     repo.name,
                     EXPECTED_EMBEDDING_DIM,
-                    len(embedding),
+                    len(metadata_embedding),
+                )
+                failed_count += 1
+                completed_since_commit += 1
+                if completed_since_commit >= checkpoint_every:
+                    try:
+                        await db.commit()
+                        completed_since_commit = 0
+                    except Exception as e:
+                        logger.error(f"Checkpoint commit failed: {e}", exc_info=True)
+                        await db.rollback()
+                        raise
+                continue
+
+            if readme_embedding is not None and len(readme_embedding) != EXPECTED_EMBEDDING_DIM:
+                logger.error(
+                    "Skip repository %s due to readme embedding dimension mismatch (expected %s, got %s).",
+                    repo.name,
+                    EXPECTED_EMBEDDING_DIM,
+                    len(readme_embedding),
                 )
                 failed_count += 1
                 completed_since_commit += 1
@@ -351,7 +373,14 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
             repo.has_ui = analysis.get("has_ui", False)
             repo.has_api = analysis.get("has_api", False)
             repo.activity_level = analysis.get("activity_level", "Medium")
-            repo.embedding = embedding
+            # Legacy embedding keeps metadata vector for backward compatibility.
+            repo.embedding = metadata_embedding
+            repo.repo_metadata_embedding = metadata_embedding
+            repo.readme_embedding = readme_embedding
+            repo.metadata_hash = dual_embeddings.get("metadata_hash", "")
+            repo.readme_hash = dual_embeddings.get("readme_hash", "")
+            repo.embedding_version = settings.embedding_version
+            repo.embedding_updated_at = datetime.utcnow()
             processed_count += 1
             completed_since_commit += 1
 

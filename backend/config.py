@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 4096
+    embedding_version: str = "v2"
+    embedding_metadata_weight: float = 0.65
+    embedding_readme_weight: float = 0.35
+    embedding_summary_max_tokens: int = 120
+    embedding_readme_max_tokens: int = 1500
     ai_analysis_concurrency: int = 1
     ai_analysis_request_delay_seconds: float = 0.5
     ai_analysis_checkpoint_every: int = 1

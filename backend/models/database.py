@@ -56,37 +56,62 @@ async def _ensure_database_exists():
 async def _ensure_embedding_dimension():
     expected_dim = int(settings.embedding_dimension)
     expected_type = f"vector({expected_dim})"
+    vector_columns = [
+        "embedding",
+        "repo_metadata_embedding",
+        "readme_embedding",
+    ]
 
     async with engine.begin() as conn:
-        result = await conn.execute(
+        # Ensure new columns exist for dual-embedding pipeline.
+        await conn.execute(
             text(
-                """
-                SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_str
-                FROM pg_attribute a
-                JOIN pg_class c ON c.oid = a.attrelid
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE c.relname = 'repositories'
-                  AND n.nspname = 'public'
-                  AND a.attname = 'embedding'
-                  AND a.attnum > 0
-                  AND NOT a.attisdropped
+                f"""
+                ALTER TABLE repositories
+                ADD COLUMN IF NOT EXISTS repo_metadata_embedding vector({expected_dim}),
+                ADD COLUMN IF NOT EXISTS readme_embedding vector({expected_dim}),
+                ADD COLUMN IF NOT EXISTS metadata_hash varchar(64) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS readme_hash varchar(64) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS embedding_version varchar(20) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS embedding_updated_at timestamp
                 """
             )
         )
-        current_type = result.scalar()
-        if not current_type or current_type == expected_type:
-            return
 
-        logger.warning(
-            "Embedding type mismatch (%s). Migrating to %s and clearing old vectors.",
-            current_type,
-            expected_type,
-        )
-        await conn.execute(text("UPDATE repositories SET embedding = NULL"))
-        await conn.execute(
-            text(f"ALTER TABLE repositories ALTER COLUMN embedding TYPE vector({expected_dim})")
-        )
-        logger.info("Embedding column migrated to %s", expected_type)
+        for column in vector_columns:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_str
+                    FROM pg_attribute a
+                    JOIN pg_class c ON c.oid = a.attrelid
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE c.relname = 'repositories'
+                      AND n.nspname = 'public'
+                      AND a.attname = :column
+                      AND a.attnum > 0
+                      AND NOT a.attisdropped
+                    """
+                ),
+                {"column": column},
+            )
+            current_type = result.scalar()
+            if not current_type or current_type == expected_type:
+                continue
+
+            logger.warning(
+                "Column %s type mismatch (%s). Migrating to %s and clearing vectors.",
+                column,
+                current_type,
+                expected_type,
+            )
+            await conn.execute(text(f"UPDATE repositories SET {column} = NULL"))
+            await conn.execute(
+                text(
+                    f"ALTER TABLE repositories ALTER COLUMN {column} TYPE vector({expected_dim})"
+                )
+            )
+            logger.info("Column %s migrated to %s", column, expected_type)
 
 
 async def init_db():
