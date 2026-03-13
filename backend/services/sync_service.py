@@ -15,6 +15,7 @@ from services import ai_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+EXPECTED_EMBEDDING_DIM = int(settings.embedding_dimension)
 
 # 全局同步状态
 _sync_status = {
@@ -243,6 +244,8 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
     )
     concurrency = max(1, settings.ai_analysis_concurrency)
     delay_seconds = max(0.0, settings.ai_analysis_request_delay_seconds)
+    checkpoint_every = max(1, settings.ai_analysis_checkpoint_every)
+    tasks: list[asyncio.Task] = []
 
     try:
         # 1) Prepare serializable input from ORM objects
@@ -294,37 +297,93 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
                         completed_count += 1
                         _sync_status["progress"] = completed_count
 
-        results = await asyncio.gather(*(analyze_one(item) for item in pending_inputs))
-
-        # 3) Apply results to DB in current session (DB-bound, single session)
-        for result_item in results:
+        # 3) Apply results to DB as each worker completes (checkpoint-friendly)
+        tasks = [asyncio.create_task(analyze_one(item)) for item in pending_inputs]
+        completed_since_commit = 0
+        for done in asyncio.as_completed(tasks):
+            result_item = await done
             if not result_item["ok"]:
                 failed_count += 1
+                completed_since_commit += 1
+                if completed_since_commit >= checkpoint_every:
+                    try:
+                        await db.commit()
+                        completed_since_commit = 0
+                    except Exception as e:
+                        logger.error(f"Checkpoint commit failed: {e}", exc_info=True)
+                        await db.rollback()
+                        raise
                 continue
 
             repo = repos_by_id.get(result_item["id"])
             if not repo:
                 failed_count += 1
+                completed_since_commit += 1
+                if completed_since_commit >= checkpoint_every:
+                    await db.commit()
+                    completed_since_commit = 0
                 continue
 
             analysis = result_item["analysis"]
+            embedding = result_item["embedding"]
+            if len(embedding) != EXPECTED_EMBEDDING_DIM:
+                logger.error(
+                    "Skip repository %s due to embedding dimension mismatch (expected %s, got %s).",
+                    repo.name,
+                    EXPECTED_EMBEDDING_DIM,
+                    len(embedding),
+                )
+                failed_count += 1
+                completed_since_commit += 1
+                if completed_since_commit >= checkpoint_every:
+                    try:
+                        await db.commit()
+                        completed_since_commit = 0
+                    except Exception as e:
+                        logger.error(f"Checkpoint commit failed: {e}", exc_info=True)
+                        await db.rollback()
+                        raise
+                continue
+
             repo.tags = analysis.get("tags", [])
             repo.category = analysis.get("category", "Other")
             repo.ai_summary = analysis.get("ai_summary", "")
             repo.has_ui = analysis.get("has_ui", False)
             repo.has_api = analysis.get("has_api", False)
             repo.activity_level = analysis.get("activity_level", "Medium")
-            repo.embedding = result_item["embedding"]
+            repo.embedding = embedding
             processed_count += 1
+            completed_since_commit += 1
 
-        await db.commit()
+            if completed_since_commit >= checkpoint_every:
+                try:
+                    await db.commit()
+                    completed_since_commit = 0
+                except Exception as e:
+                    logger.error(f"Checkpoint commit failed: {e}", exc_info=True)
+                    await db.rollback()
+                    raise
+
+        try:
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Final commit failed: {e}", exc_info=True)
+            await db.rollback()
+            raise
         analysis_log.status = "warning" if failed_count > 0 else "success"
         analysis_log.details = (
             f"AI analysis completed. Processed {processed_count}/{total_pending}, "
-            f"failed {failed_count}, concurrency {concurrency}."
+            f"failed {failed_count}, concurrency {concurrency}, "
+            f"checkpoint every {checkpoint_every}."
         )
         analysis_log.finished_at = datetime.utcnow()
     except Exception as e:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await db.rollback()
         logger.error(f"AI analysis batch failed: {e}", exc_info=True)
         analysis_log.status = "error"
         analysis_log.details = f"AI analysis batch failed: {str(e)}"
@@ -332,8 +391,12 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
     
     finally:
         _sync_status["is_syncing"] = False
-        db.add(analysis_log)
-        await db.commit()
+        try:
+            db.add(analysis_log)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to persist analysis log: {e}", exc_info=True)
 
     return {
         "message": f"Successfully analyzed {processed_count} out of {total_pending} pending repositories.",
@@ -341,4 +404,5 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
         "total_pending": total_pending,
         "failed": failed_count,
         "concurrency": concurrency,
+        "checkpoint_every": checkpoint_every,
     }

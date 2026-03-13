@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 
+import json_repair
 from openai import AsyncOpenAI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +60,75 @@ Respond in the same language as the user's query. Use markdown formatting for re
 """
 
 
+def _clean_json_text(content: str) -> str:
+    text = (content or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+    if text.endswith("```"):
+        text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
+def _extract_json_object(content: str) -> str:
+    start = content.find("{")
+    end = content.rfind("}")
+    if start == -1 or end == -1 or start >= end:
+        return ""
+    return content[start:end + 1]
+
+
+def _parse_analysis_json(content: str) -> dict[str, Any] | None:
+    cleaned = _clean_json_text(content)
+    if not cleaned:
+        return None
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        candidate = _extract_json_object(cleaned) or cleaned
+        try:
+            parsed = json_repair.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+            return None
+        except Exception:
+            return None
+
+
+def _normalize_analysis_result(result: dict[str, Any]) -> dict[str, Any]:
+    tags = result.get("tags")
+    if not isinstance(tags, list):
+        tags = []
+    tags = [str(tag).strip() for tag in tags if str(tag).strip()][:5]
+
+    category = str(result.get("category", "Other")).strip() or "Other"
+    ai_summary = str(result.get("ai_summary", "")).strip()
+    activity_level = str(result.get("activity_level", "Medium")).strip() or "Medium"
+
+    return {
+        "tags": tags,
+        "category": category,
+        "ai_summary": ai_summary,
+        "has_ui": bool(result.get("has_ui", False)),
+        "has_api": bool(result.get("has_api", False)),
+        "activity_level": activity_level,
+    }
+
+
+async def _request_analysis_content(
+    messages: list[dict[str, str]], enforce_json: bool
+) -> str:
+    kwargs: dict[str, Any] = {
+        "model": settings.openai_model,
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": 800,
+    }
+    if enforce_json:
+        kwargs["response_format"] = {"type": "json_object"}
+    response = await client.chat.completions.create(**kwargs)
+    return (response.choices[0].message.content or "").strip()
+
+
 async def analyze_repository(repo_data: dict[str, Any]) -> dict[str, Any]:
     """Analyze a repository using LLM and return structured metadata."""
     readme_excerpt = (repo_data.get("readme") or "")[:3000]
@@ -73,31 +143,77 @@ async def analyze_repository(repo_data: dict[str, Any]) -> dict[str, Any]:
         readme_excerpt=readme_excerpt,
     )
 
-    try:
-        response = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=800,
-        )
-        content = response.choices[0].message.content.strip()
-        # 清理可能的 markdown 代码块包裹
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1]
-        if content.endswith("```"):
-            content = content.rsplit("```", 1)[0]
-        result = json.loads(content)
-        return result
-    except Exception as e:
-        logger.error(f"AI analysis failed for {repo_data.get('name')}: {e}")
-        return {
-            "tags": repo_data.get("topics", [])[:5],
-            "category": "Other",
-            "ai_summary": repo_data.get("description", ""),
-            "has_ui": False,
-            "has_api": False,
-            "activity_level": "Medium",
-        }
+    bad_content = ""
+    for attempt in range(2):
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            if attempt == 1:
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "Return strict JSON only, with double quotes and no extra text.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+            try:
+                content = await _request_analysis_content(
+                    messages=messages, enforce_json=True
+                )
+            except Exception:
+                # Fallback for providers that do not support response_format.
+                content = await _request_analysis_content(
+                    messages=messages, enforce_json=False
+                )
+            result = _parse_analysis_json(content)
+            if result is not None:
+                return _normalize_analysis_result(result)
+            bad_content = content
+            logger.warning(
+                f"AI analysis JSON parse failed for {repo_data.get('name')}, attempt {attempt + 1}"
+            )
+        except Exception as e:
+            logger.error(
+                f"AI analysis failed for {repo_data.get('name')}, attempt {attempt + 1}: {e}"
+            )
+
+    if bad_content:
+        try:
+            repair_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a JSON formatter. Convert input text into valid JSON only. "
+                        "Do not add explanations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Fix this output into valid JSON with fields: "
+                        "tags, category, ai_summary, has_ui, has_api, activity_level.\n\n"
+                        f"{bad_content}"
+                    ),
+                },
+            ]
+            repaired = await _request_analysis_content(
+                messages=repair_messages, enforce_json=True
+            )
+            parsed_repaired = _parse_analysis_json(repaired)
+            if parsed_repaired is not None:
+                return _normalize_analysis_result(parsed_repaired)
+        except Exception as e:
+            logger.warning(
+                f"AI analysis JSON repair failed for {repo_data.get('name')}: {e}"
+            )
+
+    return {
+        "tags": repo_data.get("topics", [])[:5],
+        "category": "Other",
+        "ai_summary": repo_data.get("description", ""),
+        "has_ui": False,
+        "has_api": False,
+        "activity_level": "Medium",
+    }
 
 
 async def generate_embedding(text_content: str) -> list[float]:
@@ -105,12 +221,22 @@ async def generate_embedding(text_content: str) -> list[float]:
     try:
         response = await client.embeddings.create(
             model=settings.openai_embedding_model,
-            input=text_content[:8000],  # API limit
+            input=text_content[:8000],
         )
-        return response.data[0].embedding
+        embedding = response.data[0].embedding
+        expected_dim = int(settings.embedding_dimension)
+        if len(embedding) != expected_dim:
+            logger.error(
+                "Embedding dimension mismatch: expected %s, got %s (model=%s).",
+                expected_dim,
+                len(embedding),
+                settings.openai_embedding_model,
+            )
+            return [0.0] * expected_dim
+        return embedding
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}")
-        return [0.0] * 1536  # fallback zero vector
+        return [0.0] * int(settings.embedding_dimension)
 
 
 def _build_embedding_text(repo: dict[str, Any]) -> str:
@@ -139,8 +265,8 @@ async def semantic_search(
     """Search repositories by semantic similarity using pgvector."""
     query_embedding = await generate_embedding(query)
 
-    # Use pgvector's <=> operator for cosine distance
-    sql = text("""
+    sql = text(
+        """
         SELECT id, github_id, name, description, stars, language,
                tags, category, ai_summary, has_ui, has_api,
                activity_level, last_updated, readme, url, homepage,
@@ -149,7 +275,8 @@ async def semantic_search(
         WHERE embedding IS NOT NULL
         ORDER BY embedding <=> :query_embedding
         LIMIT :top_k
-    """)
+    """
+    )
 
     result = await db.execute(
         sql,
@@ -188,7 +315,7 @@ async def chat_with_repos(query: str, repos: list[dict[str, Any]]) -> str:
         parts = []
         for i, repo in enumerate(repos, 1):
             parts.append(
-                f"{i}. **{repo['name']}** (⭐ {repo['stars']:,})\n"
+                f"{i}. **{repo['name']}** ({repo['stars']:,} stars)\n"
                 f"   Language: {repo['language']}\n"
                 f"   Description: {repo['description']}\n"
                 f"   AI Summary: {repo.get('ai_summary', 'N/A')}\n"
@@ -205,7 +332,7 @@ async def chat_with_repos(query: str, repos: list[dict[str, Any]]) -> str:
             temperature=0.5,
             max_tokens=1500,
         )
-        return response.choices[0].message.content.strip()
+        return (response.choices[0].message.content or "").strip()
     except Exception as e:
         logger.error(f"Chat generation failed: {e}")
         return "I'm sorry, I encountered an error while generating a response. Please try again later."

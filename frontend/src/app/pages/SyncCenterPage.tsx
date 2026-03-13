@@ -25,7 +25,11 @@ export function SyncCenterPage() {
 
     // Only poll for status while actually syncing
     if (syncing) {
-      const interval = setInterval(loadStatus, 3000);
+      const interval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          loadStatus();
+        }
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [loadStatus, syncing]);
