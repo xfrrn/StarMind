@@ -3,15 +3,18 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import get_settings
 from models.repository import Repository, SyncLog
 from services.github_service import GitHubService
 from services import ai_service
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 # 全局同步状态
 _sync_status = {
@@ -82,7 +85,10 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
         )
         last_sync_time = last_sync.scalar()
 
-        starred_repos = await github.fetch_starred_repos(since=last_sync_time)
+        starred_repos = await github.fetch_starred_repos(
+            since=last_sync_time,
+            concurrency=settings.github_sync_page_concurrency,
+        )
         _sync_status["total"] = len(starred_repos)
 
         if not starred_repos:
@@ -92,7 +98,13 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
             await db.commit()
             return log
 
-        # 2) Process each repo
+        # 2) Fetch README in parallel first (network-bound)
+        repo_names = [repo["name"] for repo in starred_repos]
+        readme_map = await github.fetch_readmes(
+            repo_names, concurrency=settings.github_readme_concurrency
+        )
+
+        # 3) Upsert each repo into DB (DB-bound, single session for safety)
         for i, repo_data in enumerate(starred_repos):
             _sync_status["progress"] = i + 1
             _sync_status["current_repo"] = repo_data["name"]
@@ -105,8 +117,7 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
             )
             existing_repo = existing.scalar_one_or_none()
 
-            # Fetch README
-            readme = await github.fetch_readme(repo_data["name"])
+            readme = readme_map.get(repo_data["name"], "")
             repo_data["readme"] = readme
 
             # Parse updated_at
@@ -179,7 +190,9 @@ async def run_sync(db: AsyncSession, github_token: str) -> SyncLog:
         log.updated_repos = updated_count
         log.details = (
             f"Synced {new_count} new starred repositories. "
-            f"Updated {updated_count} existing records."
+            f"Updated {updated_count} existing records. "
+            f"GitHub page concurrency={max(1, settings.github_sync_page_concurrency)}, "
+            f"README concurrency={max(1, settings.github_readme_concurrency)}."
         )
         log.finished_at = datetime.utcnow()
 
@@ -222,58 +235,110 @@ async def run_ai_analysis(db: AsyncSession) -> dict:
     }
 
     processed_count = 0
+    failed_count = 0
+    analysis_log = SyncLog(
+        status="success",
+        started_at=datetime.utcnow(),
+        details="",
+    )
+    concurrency = max(1, settings.ai_analysis_concurrency)
+    delay_seconds = max(0.0, settings.ai_analysis_request_delay_seconds)
 
     try:
-        for i, repo in enumerate(pending_repos):
-            _sync_status["progress"] = i + 1
-            _sync_status["current_repo"] = repo.name
+        # 1) Prepare serializable input from ORM objects
+        pending_inputs: list[dict[str, Any]] = []
+        repos_by_id: dict[int, Repository] = {}
+        for repo in pending_repos:
+            repos_by_id[repo.id] = repo
+            pending_inputs.append(
+                {
+                    "id": repo.id,
+                    "name": repo.name,
+                    "description": repo.description,
+                    "readme": repo.readme,
+                    "language": repo.language,
+                    "topics": repo.topics,
+                    "stars": repo.stars,
+                    "updated_at": repo.updated_at.isoformat() if repo.updated_at else "",
+                }
+            )
 
-            # Build data dict for AI service
-            repo_data = {
-                "name": repo.name,
-                "description": repo.description,
-                "readme": repo.readme,
-                "language": repo.language,
-                "topics": repo.topics,
-            }
+        # 2) Run AI analysis + embedding in concurrent workers (network-bound)
+        semaphore = asyncio.Semaphore(concurrency)
+        status_lock = asyncio.Lock()
+        completed_count = 0
 
-            try:
-                # 1) Analyze repo (tags, category, summary, etc.)
-                analysis = await ai_service.analyze_repository(repo_data)
+        async def analyze_one(repo_data: dict[str, Any]) -> dict[str, Any]:
+            nonlocal completed_count
+            async with semaphore:
+                async with status_lock:
+                    _sync_status["current_repo"] = repo_data["name"]
 
-                # 2) Generate embedding
-                combined_data = {**repo_data, **analysis}
-                embedding = await ai_service.generate_repo_embedding(combined_data)
+                try:
+                    analysis = await ai_service.analyze_repository(repo_data)
+                    combined_data = {**repo_data, **analysis}
+                    embedding = await ai_service.generate_repo_embedding(combined_data)
+                    return {
+                        "id": repo_data["id"],
+                        "ok": True,
+                        "analysis": analysis,
+                        "embedding": embedding,
+                    }
+                except Exception as e:
+                    logger.error(f"Failed AI analysis for {repo_data['name']}: {e}")
+                    return {"id": repo_data["id"], "ok": False}
+                finally:
+                    if delay_seconds > 0:
+                        await asyncio.sleep(delay_seconds)
+                    async with status_lock:
+                        completed_count += 1
+                        _sync_status["progress"] = completed_count
 
-                # 3) Update DB object
-                repo.tags = analysis.get("tags", [])
-                repo.category = analysis.get("category", "Other")
-                repo.ai_summary = analysis.get("ai_summary", "")
-                repo.has_ui = analysis.get("has_ui", False)
-                repo.has_api = analysis.get("has_api", False)
-                repo.activity_level = analysis.get("activity_level", "Medium")
-                repo.embedding = embedding
+        results = await asyncio.gather(*(analyze_one(item) for item in pending_inputs))
 
-                processed_count += 1
+        # 3) Apply results to DB in current session (DB-bound, single session)
+        for result_item in results:
+            if not result_item["ok"]:
+                failed_count += 1
+                continue
 
-                # Commit every 5 repos
-                if processed_count % 5 == 0:
-                    await db.commit()
+            repo = repos_by_id.get(result_item["id"])
+            if not repo:
+                failed_count += 1
+                continue
 
-            except Exception as e:
-                logger.error(f"Failed AI analysis for {repo.name}: {e}")
-                # Continue with next so one bad repo doesn't stop the whole batch
-                
-            # Rate limiting sleep
-            await asyncio.sleep(0.5)
+            analysis = result_item["analysis"]
+            repo.tags = analysis.get("tags", [])
+            repo.category = analysis.get("category", "Other")
+            repo.ai_summary = analysis.get("ai_summary", "")
+            repo.has_ui = analysis.get("has_ui", False)
+            repo.has_api = analysis.get("has_api", False)
+            repo.activity_level = analysis.get("activity_level", "Medium")
+            repo.embedding = result_item["embedding"]
+            processed_count += 1
 
         await db.commit()
+        analysis_log.status = "warning" if failed_count > 0 else "success"
+        analysis_log.details = (
+            f"AI analysis completed. Processed {processed_count}/{total_pending}, "
+            f"failed {failed_count}, concurrency {concurrency}."
+        )
+        analysis_log.finished_at = datetime.utcnow()
+    except Exception as e:
+        logger.error(f"AI analysis batch failed: {e}", exc_info=True)
+        analysis_log.status = "error"
+        analysis_log.details = f"AI analysis batch failed: {str(e)}"
+        analysis_log.finished_at = datetime.utcnow()
     
     finally:
         _sync_status["is_syncing"] = False
+        db.add(analysis_log)
+        await db.commit()
 
     return {
         "message": f"Successfully analyzed {processed_count} out of {total_pending} pending repositories.",
         "processed": processed_count,
-        "total_pending": total_pending
+        "total_pending": total_pending,
+        "failed": failed_count,
+        "concurrency": concurrency,
     }

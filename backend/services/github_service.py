@@ -3,8 +3,9 @@
 Handles fetching starred repositories, READMEs, and rate-limit management.
 """
 
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -19,99 +20,158 @@ class GitHubService:
         self.token = token
         self.headers = {
             "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github.star+json",  # 获取 starred_at 字段
+            "Accept": "application/vnd.github.star+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    async def fetch_starred_repos(
-        self, since: datetime | None = None
-    ) -> list[dict[str, Any]]:
-        """Fetch all starred repositories, with optional incremental sync via `since`."""
-        all_repos: list[dict[str, Any]] = []
-        page = 1
-        per_page = 100
+    def _normalize_since(self, since: datetime | None) -> datetime | None:
+        if since is None:
+            return None
+        if since.tzinfo is None:
+            return since.replace(tzinfo=timezone.utc)
+        return since.astimezone(timezone.utc)
 
+    def _raise_for_github_errors(self, resp: httpx.Response):
+        if resp.status_code == 401:
+            logger.error("GitHub token is invalid or expired")
+            raise Exception("GitHub token is invalid. Please check configuration.")
+        if resp.status_code == 403:
+            remaining = resp.headers.get("X-RateLimit-Remaining", "?")
+            reset_time = resp.headers.get("X-RateLimit-Reset", "?")
+            error_msg = (
+                f"GitHub API rate limit reached (403). "
+                f"Remaining: {remaining}, Reset: {reset_time}"
+            )
+            logger.error(error_msg)
+            raise Exception(error_msg)
+
+    def _parse_starred_page(
+        self, data: list[dict[str, Any]], since: datetime | None
+    ) -> list[dict[str, Any]]:
+        repos: list[dict[str, Any]] = []
+        for item in data:
+            repo = item.get("repo", item) if isinstance(item, dict) else item
+            starred_at_str = item.get("starred_at") if isinstance(item, dict) else None
+
+            if since and starred_at_str:
+                starred_at = datetime.fromisoformat(starred_at_str.replace("Z", "+00:00"))
+                if starred_at <= since:
+                    continue
+
+            repos.append(
+                {
+                    "github_id": repo["id"],
+                    "name": repo["full_name"],
+                    "description": repo.get("description") or "",
+                    "stars": repo.get("stargazers_count", 0),
+                    "language": repo.get("language") or "",
+                    "url": repo.get("html_url", ""),
+                    "homepage": repo.get("homepage") or "",
+                    "topics": repo.get("topics", []),
+                    "updated_at": repo.get("updated_at"),
+                    "starred_at": starred_at_str,
+                }
+            )
+        return repos
+
+    async def fetch_starred_repos(
+        self, since: datetime | None = None, concurrency: int = 4
+    ) -> list[dict[str, Any]]:
+        """Fetch all starred repositories with concurrent page workers."""
         if not self.token:
-            raise ValueError("未找到 GITHUB_TOKEN，请先在环境配置中配置")
+            raise ValueError("GITHUB_TOKEN not found. Please configure it first.")
+
+        per_page = 100
+        normalized_since = self._normalize_since(since)
+        worker_count = max(1, concurrency)
+
+        next_page = 1
+        stop_paging = False
+        page_results: dict[int, list[dict[str, Any]]] = {}
+        lock = asyncio.Lock()
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            while True:
-                url = f"{GITHUB_API}/user/starred"
-                params = {"page": page, "per_page": per_page}
+            async def worker():
+                nonlocal next_page, stop_paging
+                while True:
+                    async with lock:
+                        if stop_paging:
+                            return
+                        page = next_page
+                        next_page += 1
 
-                resp = await client.get(url, headers=self.headers, params=params)
+                    url = f"{GITHUB_API}/user/starred"
+                    params = {"page": page, "per_page": per_page}
+                    resp = await client.get(url, headers=self.headers, params=params)
+                    self._raise_for_github_errors(resp)
+                    resp.raise_for_status()
+                    data = resp.json()
 
-                if resp.status_code == 401:
-                    logger.error("GitHub Token 无效或已过期")
-                    raise Exception("GitHub Token 无效，请检查配置")
-                if resp.status_code == 403:
-                    remaining = resp.headers.get("X-RateLimit-Remaining", "?")
-                    reset_time = resp.headers.get("X-RateLimit-Reset", "?")
-                    error_msg = f"GitHub API 请求受限或触发限流 (403). Remaining: {remaining}, Reset: {reset_time}"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
+                    if not data:
+                        async with lock:
+                            stop_paging = True
+                        return
 
-                resp.raise_for_status()
-                data = resp.json()
+                    repos = self._parse_starred_page(data, normalized_since)
+                    page_results[page] = repos
+                    logger.info(f"Fetched page {page}, got {len(data)} repos")
 
-                if not data:
-                    break
+                    if len(data) < per_page:
+                        async with lock:
+                            stop_paging = True
+                        return
 
-                for item in data:
-                    # Depending on Accept header, might be wrapped in 'repo'
-                    repo = item.get("repo", item) if isinstance(item, dict) else item
-                    starred_at_str = item.get("starred_at") if isinstance(item, dict) else None
+            await asyncio.gather(*(worker() for _ in range(worker_count)))
 
-                    # 增量同步：跳过 starred_at 早于 since 的仓库
-                    if since and starred_at_str:
-                        starred_at = datetime.fromisoformat(
-                            starred_at_str.replace("Z", "+00:00")
-                        )
-                        if starred_at <= since:
-                            continue
-
-                    all_repos.append(
-                        {
-                            "github_id": repo["id"],
-                            "name": repo["full_name"],
-                            "description": repo.get("description") or "",
-                            "stars": repo.get("stargazers_count", 0),
-                            "language": repo.get("language") or "",
-                            "url": repo.get("html_url", ""),
-                            "homepage": repo.get("homepage") or "",
-                            "topics": repo.get("topics", []),
-                            "updated_at": repo.get("updated_at"), # Use updated_at explicitly
-                            "starred_at": starred_at_str,
-                        }
-                    )
-
-                logger.info(f"Fetched page {page}, got {len(data)} repos")
-                
-                if len(data) < per_page:
-                    break
-                    
-                page += 1
+        all_repos: list[dict[str, Any]] = []
+        for page in sorted(page_results.keys()):
+            all_repos.extend(page_results[page])
 
         logger.info(f"Total starred repos fetched: {len(all_repos)}")
         return all_repos
 
-    async def fetch_readme(self, full_name: str) -> str:
-        """Fetch README content for a repository."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            url = f"{GITHUB_API}/repos/{full_name}/readme"
-            headers = {
-                **self.headers,
-                "Accept": "application/vnd.github.raw+json",
-            }
+    async def _fetch_readme_with_client(
+        self, client: httpx.AsyncClient, full_name: str
+    ) -> str:
+        url = f"{GITHUB_API}/repos/{full_name}/readme"
+        headers = {
+            **self.headers,
+            "Accept": "application/vnd.github.raw+json",
+        }
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 404:
+            return ""
+        self._raise_for_github_errors(resp)
+        resp.raise_for_status()
+        return resp.text
 
+    async def fetch_readme(self, full_name: str) -> str:
+        """Fetch README content for one repository."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == 404:
-                    return ""
-                resp.raise_for_status()
-                content = resp.text
-                # 截断过长的 README（保留前 8000 字符）
-                return content
+                return await self._fetch_readme_with_client(client, full_name)
             except Exception as e:
                 logger.warning(f"Failed to fetch README for {full_name}: {e}")
                 return ""
+
+    async def fetch_readmes(
+        self, full_names: list[str], concurrency: int = 8
+    ) -> dict[str, str]:
+        """Fetch READMEs for repositories concurrently."""
+        readmes: dict[str, str] = {}
+        semaphore = asyncio.Semaphore(max(1, concurrency))
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            async def fetch_one(full_name: str):
+                async with semaphore:
+                    try:
+                        readmes[full_name] = await self._fetch_readme_with_client(
+                            client, full_name
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch README for {full_name}: {e}")
+                        readmes[full_name] = ""
+
+            await asyncio.gather(*(fetch_one(name) for name in full_names))
+
+        return readmes

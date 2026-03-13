@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db, async_session
 from models.repository import Repository, SyncLog
-from services.sync_service import run_sync, get_sync_status
+from services.sync_service import run_sync, get_sync_status, run_ai_analysis
 from config import get_settings
 
 router = APIRouter(prefix="/api", tags=["sync"])
