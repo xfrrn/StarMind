@@ -1,5 +1,3 @@
-"""Backward-compatible README cleaner import path."""
-
 from services.readme_cleaning.cleaner import ReadmeCleaner
 from services.readme_cleaning.models import CleaningResult
 
