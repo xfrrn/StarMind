@@ -5,6 +5,40 @@
 import type { Repository } from './data';
 
 const API_BASE = '/api';
+const inflightGetRequests = new Map<string, Promise<unknown>>();
+const getResponseCache = new Map<string, { expiresAt: number; data: unknown }>();
+
+async function fetchJsonGet<T>(url: string, cacheTtlMs = 0): Promise<T> {
+    const now = Date.now();
+    const cached = getResponseCache.get(url);
+    if (cached && cached.expiresAt > now) {
+        return cached.data as T;
+    }
+
+    const inflight = inflightGetRequests.get(url);
+    if (inflight) {
+        return inflight as Promise<T>;
+    }
+
+    const request = (async () => {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            throw new Error(`Request failed: ${resp.status} ${resp.statusText}`);
+        }
+        const data = (await resp.json()) as T;
+        if (cacheTtlMs > 0) {
+            getResponseCache.set(url, { expiresAt: now + cacheTtlMs, data });
+        }
+        return data;
+    })();
+
+    inflightGetRequests.set(url, request);
+    try {
+        return await request;
+    } finally {
+        inflightGetRequests.delete(url);
+    }
+}
 
 // ---- Chat ----
 
@@ -50,15 +84,11 @@ export async function fetchRepositories(filters: RepoFilters = {}): Promise<Repo
             params.set(key, String(value));
         }
     });
-    const resp = await fetch(`${API_BASE}/repositories?${params}`);
-    if (!resp.ok) throw new Error(`Fetch repos failed: ${resp.statusText}`);
-    return resp.json();
+    return fetchJsonGet<RepoListResponse>(`${API_BASE}/repositories?${params}`);
 }
 
 export async function fetchRepository(id: string): Promise<Repository> {
-    const resp = await fetch(`${API_BASE}/repositories/${id}`);
-    if (!resp.ok) throw new Error(`Fetch repo failed: ${resp.statusText}`);
-    return resp.json();
+    return fetchJsonGet<Repository>(`${API_BASE}/repositories/${id}`);
 }
 
 // ---- Stats ----
@@ -70,9 +100,7 @@ export interface StatsResponse {
 }
 
 export async function fetchStats(): Promise<StatsResponse> {
-    const resp = await fetch(`${API_BASE}/stats`);
-    if (!resp.ok) throw new Error(`Fetch stats failed: ${resp.statusText}`);
-    return resp.json();
+    return fetchJsonGet<StatsResponse>(`${API_BASE}/stats`, 10_000);
 }
 
 // ---- Sync ----

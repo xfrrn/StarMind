@@ -7,6 +7,7 @@ import type { Repository } from '../data';
 
 export function RepositoriesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [repos, setRepos] = useState<Repository[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -26,7 +27,7 @@ export function RepositoriesPage() {
       const filters: RepoFilters = {
         page,
         limit: 20,
-        search: searchQuery || undefined,
+        search: debouncedSearchQuery || undefined,
         language: selectedLanguage || undefined,
         category: selectedCategory || undefined,
         activity_level: selectedActivity || undefined,
@@ -44,21 +45,27 @@ export function RepositoriesPage() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     loadRepos();
-  }, [page, selectedLanguage, selectedCategory, selectedActivity, filterHasUI, filterHasAPI]);
+  }, [
+    page,
+    debouncedSearchQuery,
+    selectedLanguage,
+    selectedCategory,
+    selectedActivity,
+    filterHasUI,
+    filterHasAPI,
+  ]);
 
   useEffect(() => {
     fetchStats().then(setStats).catch(console.error);
   }, []);
-
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      loadRepos();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   const languageEntries = stats ? Object.entries(stats.languages).slice(0, 8) : [];
   const categoryEntries = stats ? Object.entries(stats.categories) : [];
@@ -79,7 +86,10 @@ export function RepositoriesPage() {
               type="text"
               placeholder="Search repositories..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="w-full pl-9 pr-4 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
             />
           </div>

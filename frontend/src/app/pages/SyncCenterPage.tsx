@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle, Bot } from 'lucide-react';
 import { triggerSync, triggerAiAnalysis, getSyncStatus, type SyncStatusResponse } from '../api';
 
@@ -7,6 +7,11 @@ export function SyncCenterPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
+  const syncingRef = useRef(false);
+
+  useEffect(() => {
+    syncingRef.current = syncing;
+  }, [syncing]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -21,18 +26,41 @@ export function SyncCenterPage() {
   }, []);
 
   useEffect(() => {
-    loadStatus();
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    // Only poll for status while actually syncing
-    if (syncing) {
-      const interval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          loadStatus();
-        }
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [loadStatus, syncing]);
+    const scheduleNext = () => {
+      if (stopped) return;
+      const nextDelayMs = syncingRef.current ? 3000 : 20000;
+      timer = setTimeout(runOnce, nextDelayMs);
+    };
+
+    const runOnce = async () => {
+      if (stopped) return;
+      if (document.visibilityState !== 'visible') {
+        timer = setTimeout(runOnce, 15000);
+        return;
+      }
+      await loadStatus();
+      scheduleNext();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadStatus();
+      }
+    };
+
+    loadStatus();
+    scheduleNext();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [loadStatus]);
 
   const handleSync = async () => {
     try {
@@ -40,8 +68,7 @@ export function SyncCenterPage() {
       setMessage('');
       const result = await triggerSync();
       setMessage(result.message);
-      // Start polling
-      setTimeout(loadStatus, 1000);
+      setTimeout(loadStatus, 800);
     } catch (err: any) {
       setMessage(err.message || 'Sync failed');
       setSyncing(false);
@@ -54,8 +81,7 @@ export function SyncCenterPage() {
       setMessage('');
       const result = await triggerAiAnalysis();
       setMessage(result.message);
-      // Start polling
-      setTimeout(loadStatus, 1000);
+      setTimeout(loadStatus, 800);
     } catch (err: any) {
       setMessage(err.message || 'AI Analysis failed');
       setSyncing(false);
