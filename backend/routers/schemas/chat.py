@@ -1,8 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class ChatTurn(BaseModel):
+    role: str
+    message: str
 
 
 class ChatRequest(BaseModel):
     query: str
+    session_id: str | None = None
+    history: list[ChatTurn] = Field(default_factory=list)
 
 
 class RepositoryResponse(BaseModel):

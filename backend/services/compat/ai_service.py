@@ -6,16 +6,18 @@ implementation now delegates to object-based services/core components.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.analysis import ChatResponder
 from services.service_registry import (
-    get_chat_service,
     get_repository_service,
     search_service,
     embedding_service,
     repository_analyzer,
+    llm_client,
 )
 from services.domain import ReadmeCleaner
 
 _readme_cleaner = ReadmeCleaner()
+_chat_responder = ChatResponder(llm_client)
 
 
 async def analyze_repository(repo_data: dict) -> dict:
@@ -47,7 +49,7 @@ async def semantic_search(db: AsyncSession, query: str, top_k: int = 5) -> list[
 
 
 async def chat_with_repos(query: str, repos: list[dict]) -> str:
-    return await get_chat_service().chat_responder.generate_chat_answer(query, repos)
+    return await _chat_responder.generate_chat_answer(query, repos)
 
 
 def clean_readme_for_embedding(raw_readme: str) -> str:
