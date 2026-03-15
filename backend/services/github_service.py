@@ -1,7 +1,5 @@
-"""Backward-compatible GitHub service facade."""
+"""Backward-compatible import shim for GitHubService."""
 
-from core.github import GitHubSyncer
-
-GitHubService = GitHubSyncer
+from services.infrastructure.github_service import GitHubService
 
 __all__ = ["GitHubService"]

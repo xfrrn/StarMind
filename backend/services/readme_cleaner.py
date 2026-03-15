@@ -1,6 +1,5 @@
-"""Backward-compatible README cleaner import path."""
+"""Backward-compatible import shim for ReadmeCleaner."""
 
-from services.readme_cleaning.cleaner import ReadmeCleaner
-from services.readme_cleaning.models import CleaningResult
+from services.domain.readme_cleaner import CleaningResult, ReadmeCleaner
 
 __all__ = ["ReadmeCleaner", "CleaningResult"]

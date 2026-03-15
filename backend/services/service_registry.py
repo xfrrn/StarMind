@@ -4,14 +4,15 @@ from config import get_settings
 from core.analysis import ChatResponder, RepositoryAnalyzer
 from core.llm import LLMClient
 from core.retrieval import EmbeddingService, RepositorySearchService
-from services.analysis_service import AnalysisService
-from services.chat_service import ChatService
-from services.readme_cleaner import ReadmeCleaner
-from services.repository_service import RepositoryService
-from services.settings_service import SettingsService
-from services.state_transition_service import StateTransitionService
-from services.sync_runtime_state import SyncRuntimeState
-from services.sync_service import SyncService
+from services.application import (
+    AnalysisService,
+    ChatService,
+    RepositoryService,
+    SettingsService,
+    SyncService,
+)
+from services.application.runtime import SyncRuntimeState
+from services.domain import ReadmeCleaner, StateTransitionService
 
 settings = get_settings()
 
