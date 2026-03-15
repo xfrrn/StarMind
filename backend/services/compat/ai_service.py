@@ -13,7 +13,7 @@ from services.service_registry import (
     embedding_service,
     repository_analyzer,
 )
-from services.readme_cleaner import ReadmeCleaner
+from services.domain import ReadmeCleaner
 
 _readme_cleaner = ReadmeCleaner()
 
