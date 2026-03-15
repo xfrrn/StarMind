@@ -71,12 +71,55 @@ async def _ensure_repository_columns_and_embedding_dimension():
                 ADD COLUMN IF NOT EXISTS readme_for_analysis text DEFAULT '',
                 ADD COLUMN IF NOT EXISTS readme_for_embedding text DEFAULT '',
                 ADD COLUMN IF NOT EXISTS cleaning_version varchar(20) DEFAULT 'v1',
+                ADD COLUMN IF NOT EXISTS process_status varchar(20) DEFAULT 'fetched',
+                ADD COLUMN IF NOT EXISTS analyze_status varchar(20) DEFAULT 'pending',
+                ADD COLUMN IF NOT EXISTS embedding_status varchar(20) DEFAULT 'pending',
+                ADD COLUMN IF NOT EXISTS last_run_id varchar(64) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS last_error_code varchar(100) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS last_error_detail text DEFAULT '',
                 ADD COLUMN IF NOT EXISTS repo_metadata_embedding vector({expected_dim}),
                 ADD COLUMN IF NOT EXISTS readme_embedding vector({expected_dim}),
                 ADD COLUMN IF NOT EXISTS metadata_hash varchar(64) DEFAULT '',
                 ADD COLUMN IF NOT EXISTS readme_hash varchar(64) DEFAULT '',
                 ADD COLUMN IF NOT EXISTS embedding_version varchar(20) DEFAULT '',
                 ADD COLUMN IF NOT EXISTS embedding_updated_at timestamp
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS repo_process_events (
+                    id varchar(36) PRIMARY KEY,
+                    repo_id integer NOT NULL,
+                    run_id varchar(64) DEFAULT '',
+                    stage varchar(30) NOT NULL,
+                    action varchar(30) NOT NULL,
+                    status_field varchar(30) NOT NULL,
+                    from_status varchar(30) DEFAULT '',
+                    to_status varchar(30) DEFAULT '',
+                    reason text DEFAULT '',
+                    error_code varchar(100) DEFAULT '',
+                    error_detail text DEFAULT '',
+                    attempt integer DEFAULT 1,
+                    created_at timestamp NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_repo_process_events_repo_id
+                ON repo_process_events(repo_id)
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_repo_process_events_run_id
+                ON repo_process_events(run_id)
                 """
             )
         )

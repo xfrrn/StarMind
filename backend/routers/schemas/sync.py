@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SyncStatusResponse(BaseModel):
@@ -11,6 +11,9 @@ class SyncStatusResponse(BaseModel):
     pending_repos: int
     last_sync: str | None
     logs: list[dict]
+    process_breakdown: dict[str, int] = Field(default_factory=dict)
+    analyze_breakdown: dict[str, int] = Field(default_factory=dict)
+    embedding_breakdown: dict[str, int] = Field(default_factory=dict)
 
 
 class SyncTriggerResponse(BaseModel):

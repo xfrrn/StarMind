@@ -10,6 +10,7 @@ from .service_registry import (
     get_sync_service,
 )
 from .settings_service import SettingsService
+from .state_transition_service import StateTransitionService
 from .sync_runtime_state import SyncRuntimeState
 from .sync_service import SyncService
 
@@ -19,6 +20,7 @@ __all__ = [
     "ReadmeCleaner",
     "RepositoryService",
     "SettingsService",
+    "StateTransitionService",
     "SyncRuntimeState",
     "SyncService",
     "get_analysis_service",

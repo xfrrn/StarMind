@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from core.github import GitHubSyncer
 from models.repository import Repository, SyncLog
 from services.analysis_service import AnalysisService
 from services.readme_cleaner import ReadmeCleaner
+from services.state_transition_service import StateTransitionService
 from services.sync_runtime_state import SyncRuntimeState
 from utils.response_utils import to_sync_log_item
 from utils.time_utils import format_last_sync_time, format_relative_time, parse_iso_to_naive_utc
@@ -25,11 +27,13 @@ class SyncService:
         runtime_state: SyncRuntimeState,
         analysis_service: AnalysisService,
         readme_cleaner: ReadmeCleaner | None = None,
+        state_transition_service: StateTransitionService | None = None,
     ):
         self.settings = settings
         self.runtime_state = runtime_state
         self.analysis_service = analysis_service
         self.readme_cleaner = readme_cleaner or ReadmeCleaner()
+        self.state_transition_service = state_transition_service or StateTransitionService()
 
     async def run_sync(self, db: AsyncSession, github_token: str) -> SyncLog:
         if self.runtime_state.get_sync_status()["is_syncing"]:
@@ -40,6 +44,7 @@ class SyncService:
         log = SyncLog(status="success", started_at=datetime.utcnow(), details="")
         new_count = 0
         updated_count = 0
+        run_id = f"sync-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
 
         try:
             syncer = GitHubSyncer(github_token)
@@ -85,6 +90,7 @@ class SyncService:
                 starred_at = parse_iso_to_naive_utc(repo_data.get("starred_at"))
 
                 if existing_repo:
+                    self.state_transition_service.ensure_defaults(existing_repo)
                     existing_repo.name = repo_data["name"]
                     existing_repo.description = repo_data["description"]
                     existing_repo.stars = repo_data["stars"]
@@ -112,33 +118,67 @@ class SyncService:
                     existing_repo.readme_hash = ""
                     existing_repo.embedding_version = ""
                     existing_repo.embedding_updated_at = None
+                    existing_repo.analyze_status = "pending"
+                    existing_repo.embedding_status = "pending"
+                    existing_repo.last_error_code = ""
+                    existing_repo.last_error_detail = ""
+                    try:
+                        db.add(
+                            self.state_transition_service.transition(
+                                repo=existing_repo,
+                                status_field="process",
+                                to_status="cleaned",
+                                stage="clean",
+                                action="success",
+                                run_id=run_id,
+                            )
+                        )
+                    except ValueError:
+                        logger.warning(
+                            "Invalid process transition during sync update for repo=%s",
+                            existing_repo.id,
+                        )
                     updated_count += 1
                 else:
+                    new_repo = Repository(
+                        github_id=repo_data["github_id"],
+                        name=repo_data["name"],
+                        description=repo_data["description"],
+                        stars=repo_data["stars"],
+                        language=repo_data["language"],
+                        topics=repo_data.get("topics", []),
+                        tags=[],
+                        category="Pending Analysis",
+                        ai_summary="",
+                        has_ui=False,
+                        has_api=False,
+                        activity_level="Medium",
+                        last_updated=format_relative_time(updated_at),
+                        updated_at=updated_at,
+                        readme=readme,
+                        readme_for_analysis=readme_for_analysis,
+                        readme_for_embedding=readme_for_embedding,
+                        cleaning_version="v1",
+                        process_status="cleaned",
+                        analyze_status="pending",
+                        embedding_status="pending",
+                        last_run_id=run_id,
+                        url=repo_data["url"],
+                        homepage=repo_data.get("homepage", ""),
+                        starred_at=starred_at,
+                        synced_at=datetime.utcnow(),
+                        embedding=None,
+                    )
+                    db.add(new_repo)
+                    await db.flush()
                     db.add(
-                        Repository(
-                            github_id=repo_data["github_id"],
-                            name=repo_data["name"],
-                            description=repo_data["description"],
-                            stars=repo_data["stars"],
-                            language=repo_data["language"],
-                            topics=repo_data.get("topics", []),
-                            tags=[],
-                            category="Pending Analysis",
-                            ai_summary="",
-                            has_ui=False,
-                            has_api=False,
-                            activity_level="Medium",
-                            last_updated=format_relative_time(updated_at),
-                            updated_at=updated_at,
-                            readme=readme,
-                            readme_for_analysis=readme_for_analysis,
-                            readme_for_embedding=readme_for_embedding,
-                            cleaning_version="v1",
-                            url=repo_data["url"],
-                            homepage=repo_data.get("homepage", ""),
-                            starred_at=starred_at,
-                            synced_at=datetime.utcnow(),
-                            embedding=None,
+                        self.state_transition_service.transition(
+                            repo=new_repo,
+                            status_field="process",
+                            to_status="cleaned",
+                            stage="clean",
+                            action="success",
+                            run_id=run_id,
                         )
                     )
                     new_count += 1
@@ -183,6 +223,7 @@ class SyncService:
         indexed_result = await db.execute(
             select(func.count(Repository.id)).where(
                 or_(
+                    Repository.embedding_status == "success",
                     Repository.repo_metadata_embedding.isnot(None),
                     Repository.readme_embedding.isnot(None),
                     Repository.embedding.isnot(None),
@@ -194,7 +235,8 @@ class SyncService:
         pending_result = await db.execute(
             select(func.count(Repository.id)).where(
                 or_(
-                    Repository.category == "Pending Analysis",
+                    Repository.process_status.in_(["cleaned", "failed"]),
+                    Repository.analyze_status.in_(["pending", "failed", "running"]),
                     Repository.repo_metadata_embedding.is_(None),
                     Repository.readme_embedding.is_(None),
                     Repository.embedding_version != self.settings.embedding_version,
@@ -217,6 +259,28 @@ class SyncService:
         logs = logs_result.scalars().all()
         log_list = [to_sync_log_item(log.status, log.started_at, log.details or "") for log in logs]
 
+        process_rows = await db.execute(
+            select(Repository.process_status, func.count(Repository.id)).group_by(Repository.process_status)
+        )
+        analyze_rows = await db.execute(
+            select(Repository.analyze_status, func.count(Repository.id)).group_by(Repository.analyze_status)
+        )
+        embedding_rows = await db.execute(
+            select(Repository.embedding_status, func.count(Repository.id)).group_by(Repository.embedding_status)
+        )
+        process_breakdown = {
+            (row[0] or "unknown"): row[1]
+            for row in process_rows.all()
+        }
+        analyze_breakdown = {
+            (row[0] or "unknown"): row[1]
+            for row in analyze_rows.all()
+        }
+        embedding_breakdown = {
+            (row[0] or "unknown"): row[1]
+            for row in embedding_rows.all()
+        }
+
         return {
             "is_syncing": status["is_syncing"],
             "progress": status["progress"],
@@ -227,6 +291,9 @@ class SyncService:
             "pending_repos": pending_repos,
             "last_sync": last_sync,
             "logs": log_list,
+            "process_breakdown": process_breakdown,
+            "analyze_breakdown": analyze_breakdown,
+            "embedding_breakdown": embedding_breakdown,
         }
 
     def validate_sync_trigger(self) -> dict | None:

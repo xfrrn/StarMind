@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 from sqlalchemy import (
     BigInteger,
@@ -41,6 +42,12 @@ class Repository(Base):
     readme_for_analysis = Column(Text, default="")
     readme_for_embedding = Column(Text, default="")
     cleaning_version = Column(String(20), default="v1")
+    process_status = Column(String(20), default="fetched")
+    analyze_status = Column(String(20), default="pending")
+    embedding_status = Column(String(20), default="pending")
+    last_run_id = Column(String(64), default="")
+    last_error_code = Column(String(100), default="")
+    last_error_detail = Column(Text, default="")
     url = Column(Text, default="")
     homepage = Column(Text, default="")
     starred_at = Column(DateTime, default=None)
@@ -78,3 +85,21 @@ class Setting(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     key = Column(String(100), unique=True, nullable=False)
     value = Column(Text, default="")
+
+
+class RepoProcessEvent(Base):
+    __tablename__ = "repo_process_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repo_id = Column(Integer, nullable=False, index=True)
+    run_id = Column(String(64), default="", index=True)
+    stage = Column(String(30), nullable=False)  # sync, clean, analyze, embed
+    action = Column(String(30), nullable=False)  # start, success, fail, retry
+    status_field = Column(String(30), nullable=False)  # process/analyze/embedding
+    from_status = Column(String(30), default="")
+    to_status = Column(String(30), default="")
+    reason = Column(Text, default="")
+    error_code = Column(String(100), default="")
+    error_detail = Column(Text, default="")
+    attempt = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

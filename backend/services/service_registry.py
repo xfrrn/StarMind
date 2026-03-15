@@ -9,6 +9,7 @@ from services.chat_service import ChatService
 from services.readme_cleaner import ReadmeCleaner
 from services.repository_service import RepositoryService
 from services.settings_service import SettingsService
+from services.state_transition_service import StateTransitionService
 from services.sync_runtime_state import SyncRuntimeState
 from services.sync_service import SyncService
 
@@ -21,6 +22,7 @@ repository_analyzer = RepositoryAnalyzer(settings, llm_client)
 chat_responder = ChatResponder(llm_client)
 runtime_state = SyncRuntimeState()
 readme_cleaner = ReadmeCleaner()
+state_transition_service = StateTransitionService()
 
 analysis_service = AnalysisService(
     settings=settings,
@@ -28,12 +30,14 @@ analysis_service = AnalysisService(
     repository_analyzer=repository_analyzer,
     embedding_service=embedding_service,
     readme_cleaner=readme_cleaner,
+    state_transition_service=state_transition_service,
 )
 sync_service = SyncService(
     settings=settings,
     runtime_state=runtime_state,
     analysis_service=analysis_service,
     readme_cleaner=readme_cleaner,
+    state_transition_service=state_transition_service,
 )
 chat_service = ChatService(search_service=search_service, chat_responder=chat_responder)
 repository_service = RepositoryService(settings)
