@@ -21,6 +21,127 @@ from services.readme_cleaning.cleaner import ReadmeCleaner
 logger = logging.getLogger(__name__)
 
 
+def _record_embedding_mismatch_transitions(
+    state_transition_service: StateTransitionService,
+    repo: Repository,
+    run_id: str,
+    mismatch_type: str,
+) -> list:
+    """Record state transitions for embedding dimension mismatch.
+
+    Returns list of transition events to add to session.
+    """
+    transitions = [
+        state_transition_service.transition(
+            repo=repo,
+            status_field="analyze",
+            to_status="success",
+            stage="analyze",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="process",
+            to_status="analyzed",
+            stage="analyze",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="embedding",
+            to_status="running",
+            stage="embed",
+            action="start",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="embedding",
+            to_status="failed",
+            stage="embed",
+            action="fail",
+            run_id=run_id,
+            reason=f"{mismatch_type} embedding dimension mismatch",
+            error_code="embedding_dim_mismatch",
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="process",
+            to_status="failed",
+            stage="embed",
+            action="fail",
+            run_id=run_id,
+            reason="embedding dimension mismatch",
+            error_code="embedding_dim_mismatch",
+        ),
+    ]
+    return transitions
+
+
+def _record_success_transitions(
+    state_transition_service: StateTransitionService,
+    repo: Repository,
+    run_id: str,
+) -> list:
+    """Record state transitions for successful analysis and embedding.
+
+    Returns list of transition events to add to session.
+    """
+    transitions = [
+        state_transition_service.transition(
+            repo=repo,
+            status_field="analyze",
+            to_status="success",
+            stage="analyze",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="process",
+            to_status="analyzed",
+            stage="analyze",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="embedding",
+            to_status="running",
+            stage="embed",
+            action="start",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="embedding",
+            to_status="success",
+            stage="embed",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="process",
+            to_status="embedded",
+            stage="embed",
+            action="success",
+            run_id=run_id,
+        ),
+        state_transition_service.transition(
+            repo=repo,
+            status_field="process",
+            to_status="completed",
+            stage="finalize",
+            action="success",
+            run_id=run_id,
+        ),
+    ]
+    return transitions
+
+
 class AnalysisService:
     def __init__(
         self,
@@ -218,60 +339,10 @@ class AnalysisService:
                         len(metadata_embedding),
                     )
                     try:
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="analyze",
-                                to_status="success",
-                                stage="analyze",
-                                action="success",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="process",
-                                to_status="analyzed",
-                                stage="analyze",
-                                action="success",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="embedding",
-                                to_status="running",
-                                stage="embed",
-                                action="start",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="embedding",
-                                to_status="failed",
-                                stage="embed",
-                                action="fail",
-                                run_id=run_id,
-                                reason="metadata embedding dimension mismatch",
-                                error_code="embedding_dim_mismatch",
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="process",
-                                to_status="failed",
-                                stage="embed",
-                                action="fail",
-                                run_id=run_id,
-                                reason="embedding dimension mismatch",
-                                error_code="embedding_dim_mismatch",
-                            )
-                        )
+                        for transition in _record_embedding_mismatch_transitions(
+                            self.state_transition_service, repo, run_id, "metadata"
+                        ):
+                            db.add(transition)
                     except ValueError:
                         logger.warning("Invalid transition while handling metadata mismatch for repo=%s", repo.id)
                     failed_count += 1
@@ -291,60 +362,10 @@ class AnalysisService:
                         len(readme_embedding),
                     )
                     try:
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="analyze",
-                                to_status="success",
-                                stage="analyze",
-                                action="success",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="process",
-                                to_status="analyzed",
-                                stage="analyze",
-                                action="success",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="embedding",
-                                to_status="running",
-                                stage="embed",
-                                action="start",
-                                run_id=run_id,
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="embedding",
-                                to_status="failed",
-                                stage="embed",
-                                action="fail",
-                                run_id=run_id,
-                                reason="readme embedding dimension mismatch",
-                                error_code="embedding_dim_mismatch",
-                            )
-                        )
-                        db.add(
-                            self.state_transition_service.transition(
-                                repo=repo,
-                                status_field="process",
-                                to_status="failed",
-                                stage="embed",
-                                action="fail",
-                                run_id=run_id,
-                                reason="embedding dimension mismatch",
-                                error_code="embedding_dim_mismatch",
-                            )
-                        )
+                        for transition in _record_embedding_mismatch_transitions(
+                            self.state_transition_service, repo, run_id, "readme"
+                        ):
+                            db.add(transition)
                     except ValueError:
                         logger.warning("Invalid transition while handling readme mismatch for repo=%s", repo.id)
                     failed_count += 1
@@ -373,66 +394,10 @@ class AnalysisService:
                 repo.embedding_version = self.settings.embedding_version
                 repo.embedding_updated_at = datetime.utcnow()
                 try:
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="analyze",
-                            to_status="success",
-                            stage="analyze",
-                            action="success",
-                            run_id=run_id,
-                        )
-                    )
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="process",
-                            to_status="analyzed",
-                            stage="analyze",
-                            action="success",
-                            run_id=run_id,
-                        )
-                    )
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="embedding",
-                            to_status="running",
-                            stage="embed",
-                            action="start",
-                            run_id=run_id,
-                        )
-                    )
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="embedding",
-                            to_status="success",
-                            stage="embed",
-                            action="success",
-                            run_id=run_id,
-                        )
-                    )
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="process",
-                            to_status="embedded",
-                            stage="embed",
-                            action="success",
-                            run_id=run_id,
-                        )
-                    )
-                    db.add(
-                        self.state_transition_service.transition(
-                            repo=repo,
-                            status_field="process",
-                            to_status="completed",
-                            stage="finalize",
-                            action="success",
-                            run_id=run_id,
-                        )
-                    )
+                    for transition in _record_success_transitions(
+                        self.state_transition_service, repo, run_id
+                    ):
+                        db.add(transition)
                 except ValueError:
                     logger.warning("Invalid transition while marking success for repo=%s", repo.id)
                 processed_count += 1

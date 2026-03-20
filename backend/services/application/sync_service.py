@@ -71,14 +71,18 @@ class SyncService:
                 concurrency=self.settings.github_readme_concurrency,
             )
 
+            # Batch load existing repositories to avoid N+1 queries
+            github_ids = [repo_data["github_id"] for repo_data in starred_repos]
+            existing_result = await db.execute(
+                select(Repository).where(Repository.github_id.in_(github_ids))
+            )
+            existing_by_github_id = {r.github_id: r for r in existing_result.scalars().all()}
+
             for i, repo_data in enumerate(starred_repos):
                 self.runtime_state.set_progress(i + 1)
                 self.runtime_state.set_current_repo(repo_data["name"])
 
-                existing = await db.execute(
-                    select(Repository).where(Repository.github_id == repo_data["github_id"])
-                )
-                existing_repo = existing.scalar_one_or_none()
+                existing_repo = existing_by_github_id.get(repo_data["github_id"])
 
                 readme = readme_map.get(repo_data["name"], "")
                 readme_for_analysis = self.readme_cleaner.clean_for_analysis(readme, max_tokens=1200)
