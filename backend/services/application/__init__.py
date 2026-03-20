@@ -1,13 +1,11 @@
-from .analysis_service import AnalysisService
-from .chat_service import ChatService
-from .repository_service import RepositoryService
-from .runtime import SyncRuntimeState
-from .settings_service import SettingsService
-from .sync_service import SyncService
+from services.application.analysis_service import AnalysisService
+from services.application.repository_service import RepositoryService
+from services.application.runtime import SyncRuntimeState
+from services.application.settings_service import SettingsService
+from services.application.sync_service import SyncService
 
 __all__ = [
     "AnalysisService",
-    "ChatService",
     "RepositoryService",
     "SyncRuntimeState",
     "SettingsService",

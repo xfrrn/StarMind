@@ -1,13 +1,13 @@
-from .application import (
+from services.application import (
     AnalysisService,
-    ChatService,
     RepositoryService,
-    SettingsService,
     SyncRuntimeState,
+    SettingsService,
     SyncService,
 )
-from .domain import ReadmeCleaner, StateTransitionService
-from .service_registry import (
+from services.domain.state_transition_service import StateTransitionService
+from services.readme_cleaning.cleaner import ReadmeCleaner
+from services.service_registry import (
     get_analysis_service,
     get_chat_service,
     get_repository_service,
@@ -17,7 +17,6 @@ from .service_registry import (
 
 __all__ = [
     "AnalysisService",
-    "ChatService",
     "ReadmeCleaner",
     "RepositoryService",
     "SettingsService",

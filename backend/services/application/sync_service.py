@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import Settings
 from core.github import GitHubSyncer
 from models.repository import Repository, SyncLog
-from services.domain import ReadmeCleaner, StateTransitionService
+from services.domain import StateTransitionService
+from services.readme_cleaning.cleaner import ReadmeCleaner
 from services.application.analysis_service import AnalysisService
 from services.application.runtime import SyncRuntimeState
 from utils.response_utils import to_sync_log_item

@@ -6,13 +6,14 @@ from core.llm import LLMClient
 from core.retrieval import EmbeddingService, RepositorySearchService
 from services.application import (
     AnalysisService,
-    ChatService,
     RepositoryService,
     SettingsService,
     SyncService,
 )
 from services.application.runtime import SyncRuntimeState
-from services.domain import ReadmeCleaner, StateTransitionService
+from services.chat.chat_service import ChatService
+from services.domain import StateTransitionService
+from services.readme_cleaning.cleaner import ReadmeCleaner
 
 settings = get_settings()
 

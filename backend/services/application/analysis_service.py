@@ -15,7 +15,8 @@ from core.github.checkpoint import commit_when_reach_checkpoint
 from core.retrieval import EmbeddingService
 from models.repository import Repository, SyncLog
 from services.application.runtime import SyncRuntimeState
-from services.domain import ReadmeCleaner, StateTransitionService
+from services.domain import StateTransitionService
+from services.readme_cleaning.cleaner import ReadmeCleaner
 
 logger = logging.getLogger(__name__)
 
