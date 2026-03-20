@@ -1,7 +1,5 @@
 """Repository service object: listing, detail and stats workflows."""
 
-from typing import Optional
-
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,12 +19,12 @@ class RepositoryService:
         *,
         page: int,
         limit: int,
-        search: Optional[str],
-        language: Optional[str],
-        category: Optional[str],
-        has_ui: Optional[bool],
-        has_api: Optional[bool],
-        activity_level: Optional[str],
+        search: str | None,
+        language: str | None,
+        category: str | None,
+        has_ui: bool | None,
+        has_api: bool | None,
+        activity_level: str | None,
     ) -> dict:
         query = select(Repository)
 
