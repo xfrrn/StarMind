@@ -36,8 +36,9 @@ class LLMClient:
         return (response.choices[0].message.content or "").strip()
 
     async def create_embedding(self, text_content: str) -> list[float]:
+        max_len = self.settings.openai_embedding_max_text_length
         response = await self._client.embeddings.create(
             model=self.settings.openai_embedding_model,
-            input=text_content[:8000],
+            input=text_content[:max_len],
         )
         return response.data[0].embedding

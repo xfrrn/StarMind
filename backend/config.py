@@ -5,6 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # GitHub
     github_token: str = ""
+    github_api_url: str = "https://api.github.com"
     github_sync_page_concurrency: int = 4
     github_readme_concurrency: int = 8
 
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_max_text_length: int = 8000
     embedding_dimension: int = 4096
     embedding_version: str = "v2"
     embedding_metadata_weight: float = 0.65

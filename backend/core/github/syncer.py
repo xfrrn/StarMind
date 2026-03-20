@@ -7,13 +7,19 @@ from typing import Any
 
 import httpx
 
+from config import get_settings
+
 logger = logging.getLogger(__name__)
-GITHUB_API = "https://api.github.com"
+
+
+def _get_github_api_url() -> str:
+    return get_settings().github_api_url
 
 
 class GitHubSyncer:
     def __init__(self, token: str):
         self.token = token
+        self.github_api_url = _get_github_api_url()
         self.headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github.star+json",
@@ -99,7 +105,7 @@ class GitHubSyncer:
                         page = next_page
                         next_page += 1
 
-                    url = f"{GITHUB_API}/user/starred"
+                    url = f"{self.github_api_url}/user/starred"
                     params = {"page": page, "per_page": per_page}
                     resp = await client.get(url, headers=self.headers, params=params)
                     self._raise_for_github_errors(resp)
@@ -133,7 +139,7 @@ class GitHubSyncer:
         client: httpx.AsyncClient,
         full_name: str,
     ) -> str:
-        url = f"{GITHUB_API}/repos/{full_name}/readme"
+        url = f"{self.github_api_url}/repos/{full_name}/readme"
         headers = {
             **self.headers,
             "Accept": "application/vnd.github.raw+json",
