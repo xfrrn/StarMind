@@ -6,11 +6,13 @@ import time
 from collections import OrderedDict
 from typing import Any
 
+from openai import APIConnectionError, APIError, RateLimitError
 from sqlalchemy import String, and_, cast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
 from core.retrieval import EmbeddingService
+from core.retrieval.search import build_weighted_vector_search_sql
 from models.repository import Repository
 from services.chat.models import RepoCandidate, RepoQuery, RetrievalPlan
 from services.chat.policies import ChatPolicy
@@ -142,24 +144,22 @@ class RetrievalService:
                 self._save_cached_embedding(query_text, query_embedding)
             else:
                 logger.debug("Chat query embedding cache hit")
-        except Exception as e:
-            logger.warning("Vector embedding generation failed for chat query: %s", e)
+        except asyncio.TimeoutError:
+            logger.warning("Vector embedding generation timed out for chat query")
+            return []
+        except (APIConnectionError, RateLimitError) as e:
+            logger.warning("OpenAI API error during embedding generation: %s", e)
+            return []
+        except APIError as e:
+            logger.error("OpenAI API error during embedding generation: %s", e)
             return []
 
         metadata_weight = float(self.settings.embedding_metadata_weight)
         readme_weight = float(self.settings.embedding_readme_weight)
         sql = text(
-            """
-            SELECT id, github_id, name, description, stars, language,
-                   tags, category, ai_summary, has_ui, has_api, activity_level,
-                   last_updated, readme_for_embedding, readme, url, topics,
-                   (:metadata_weight * COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) +
-                    :readme_weight * COALESCE(readme_embedding <=> :query_embedding, 2.0)) AS distance
-            FROM repositories
-            WHERE repo_metadata_embedding IS NOT NULL OR readme_embedding IS NOT NULL
-            ORDER BY distance
-            LIMIT :limit
-            """
+            build_weighted_vector_search_sql(
+                extra_columns="topics, readme_for_embedding, homepage",
+            )
         )
         rows = (await db.execute(
             sql,

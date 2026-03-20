@@ -9,6 +9,58 @@ from config import Settings
 from core.retrieval.embeddings import EmbeddingService
 
 
+# Common columns for vector search (shared between search.py and retrieval_service.py)
+VECTOR_SEARCH_COMMON_COLUMNS = """
+    id, github_id, name, description, stars, language,
+    tags, category, ai_summary, has_ui, has_api, activity_level,
+    last_updated, readme, url
+"""
+
+# Distance calculation expression
+VECTOR_SEARCH_DISTANCE_EXPR = """
+    (:metadata_weight * COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) +
+     :readme_weight * COALESCE(readme_embedding <=> :query_embedding, 2.0)) AS distance
+"""
+
+# Common WHERE clause for vector search
+VECTOR_SEARCH_WHERE_CLAUSE = """
+    repo_metadata_embedding IS NOT NULL OR readme_embedding IS NOT NULL
+"""
+
+
+def build_weighted_vector_search_sql(
+    *,
+    extra_columns: str = "",
+    include_distances: bool = False,
+) -> str:
+    """Build SQL for weighted vector similarity search.
+
+    Args:
+        extra_columns: Additional columns to select (comma-separated)
+        include_distances: If True, include individual metadata_distance and readme_distance columns
+
+    Returns:
+        SQL query string with placeholders for query_embedding, metadata_weight, readme_weight, and limit
+    """
+    extra_cols = f", {extra_columns}" if extra_columns else ""
+    distance_columns = ""
+    if include_distances:
+        distance_columns = """
+            COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) AS metadata_distance,
+            COALESCE(readme_embedding <=> :query_embedding, 2.0) AS readme_distance,
+        """
+
+    return f"""
+        SELECT {VECTOR_SEARCH_COMMON_COLUMNS}{extra_cols},
+               {distance_columns}
+               {VECTOR_SEARCH_DISTANCE_EXPR}
+        FROM repositories
+        WHERE {VECTOR_SEARCH_WHERE_CLAUSE}
+        ORDER BY distance
+        LIMIT :limit
+    """
+
+
 class RepositorySearchService:
     def __init__(self, settings: Settings, embedding_service: EmbeddingService):
         self.settings = settings
@@ -24,27 +76,13 @@ class RepositorySearchService:
         metadata_weight = float(self.settings.embedding_metadata_weight)
         readme_weight = float(self.settings.embedding_readme_weight)
 
-        sql = text(
-            """
-            SELECT id, github_id, name, description, stars, language,
-                   tags, category, ai_summary, has_ui, has_api,
-                   activity_level, last_updated, readme, url, homepage,
-                   COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) AS metadata_distance,
-                   COALESCE(readme_embedding <=> :query_embedding, 2.0) AS readme_distance,
-                   (:metadata_weight * COALESCE(repo_metadata_embedding <=> :query_embedding, 2.0) +
-                    :readme_weight * COALESCE(readme_embedding <=> :query_embedding, 2.0)) AS distance
-            FROM repositories
-            WHERE repo_metadata_embedding IS NOT NULL OR readme_embedding IS NOT NULL
-            ORDER BY distance
-            LIMIT :top_k
-            """
-        )
+        sql = text(build_weighted_vector_search_sql(include_distances=True))
 
         result = await db.execute(
             sql,
             {
                 "query_embedding": str(query_embedding),
-                "top_k": top_k,
+                "limit": top_k,
                 "metadata_weight": metadata_weight,
                 "readme_weight": readme_weight,
             },
