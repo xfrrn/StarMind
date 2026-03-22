@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Star, Github, ArrowRight, Activity, Terminal } from 'lucide-react';
 import { Link } from 'react-router';
 import { Repository } from '../data';
@@ -9,7 +9,7 @@ interface RepoCardProps {
   showAiReason?: boolean;
 }
 
-export function RepoCard({ repo, showAiReason = false }: RepoCardProps) {
+export const RepoCard = memo(function RepoCard({ repo, showAiReason = false }: RepoCardProps) {
   return (
     <div className="group relative flex flex-col justify-between p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:shadow-lg hover:shadow-zinc-100/50 dark:hover:shadow-zinc-950/50 transition-all duration-200">
       <div>
@@ -76,9 +76,9 @@ export function RepoCard({ repo, showAiReason = false }: RepoCardProps) {
       </div>
     </div>
   );
-}
+});
 
-function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
+const SparklesIcon = memo(function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -97,4 +97,4 @@ function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
       <path d="M17 19h4" />
     </svg>
   );
-}
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { Search, ChevronDown, Settings2 } from 'lucide-react';
 import { RepoCard } from '../components/RepoCard';
 import { Badge } from '../components/Badge';
@@ -212,7 +212,7 @@ export function RepositoriesPage() {
   );
 }
 
-function FilterSection({ title, children }: { title: string, children: React.ReactNode }) {
+const FilterSection = memo(function FilterSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 flex items-center justify-between">
@@ -224,9 +224,9 @@ function FilterSection({ title, children }: { title: string, children: React.Rea
       </div>
     </div>
   );
-}
+});
 
-function FilterCheckbox({ label, count, checked = false, onChange }: { label: string, count: number, checked?: boolean, onChange?: () => void }) {
+const FilterCheckbox = memo(function FilterCheckbox({ label, count, checked = false, onChange }: { label: string, count: number, checked?: boolean, onChange?: () => void }) {
   return (
     <label className="flex items-center justify-between group cursor-pointer">
       <div className="flex items-center gap-2">
@@ -243,4 +243,4 @@ function FilterCheckbox({ label, count, checked = false, onChange }: { label: st
       {count > 0 && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{count}</Badge>}
     </label>
   );
-}
+});
