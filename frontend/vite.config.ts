@@ -28,4 +28,19 @@ export default defineConfig({
       },
     },
   },
+
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React libraries - changes rarely
+          vendor: ['react', 'react-dom', 'react-router'],
+          // Animation library - separate for better caching
+          animation: ['motion'],
+          // Markdown rendering - heavy but stable
+          markdown: ['react-markdown', 'remark-gfm', 'rehype-raw'],
+        },
+      },
+    },
+  },
 })
