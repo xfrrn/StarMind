@@ -4,7 +4,11 @@
 
 import type { Repository } from './data';
 
-const API_BASE = '/api';
+// Development: use Vite proxy (/api -> backend via vite.config.ts)
+// Production: use full URL from environment variable
+const API_BASE = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api`
+  : '/api';
 
 // Cache configuration
 const MAX_CACHE_SIZE = 100;

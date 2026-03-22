@@ -1,46 +1,43 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
-  plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
-    react(),
-    tailwindcss(),
-  ],
-  resolve: {
-    alias: {
-      // Alias @ to the src directory
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
 
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
-  assetsInclude: ['**/*.svg', '**/*.csv'],
-
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
-  },
 
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Core React libraries - changes rarely
-          vendor: ['react', 'react-dom', 'react-router'],
-          // Animation library - separate for better caching
-          animation: ['motion'],
-          // Markdown rendering - heavy but stable
-          markdown: ['react-markdown', 'remark-gfm', 'rehype-raw'],
+    assetsInclude: ['**/*.svg', '**/*.csv'],
+
+    server: {
+      proxy: {
+        '/api': {
+          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          changeOrigin: true,
         },
       },
     },
-  },
+
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router'],
+            animation: ['motion'],
+            markdown: ['react-markdown', 'remark-gfm', 'rehype-raw'],
+          },
+        },
+      },
+    },
+  }
 })
