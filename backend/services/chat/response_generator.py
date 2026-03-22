@@ -5,8 +5,13 @@ import logging
 from collections.abc import AsyncGenerator
 
 from core.llm import LLMClient
+from services.chat.context_manager import (
+    ContextManager,
+    ContextConfig,
+    format_token_count,
+)
 from services.chat.exceptions import GenerationError
-from services.chat.models import BuiltContext, ChatTurn
+from services.chat.models import BuiltContext
 from services.chat.prompts import (
     GENERAL_CHAT_PROMPT,
     REPO_ANALYSIS_PROMPT,
@@ -18,14 +23,16 @@ from services.chat.types import IntentType
 
 logger = logging.getLogger(__name__)
 
-# Maximum history turns to include in context
-MAX_HISTORY_TURNS = 10
-
 
 class ResponseGenerator:
     def __init__(self, llm_client: LLMClient, timeout_seconds: float = 8.0):
         self.llm_client = llm_client
         self.timeout_seconds = max(1.0, timeout_seconds)
+        self.context_manager = ContextManager(ContextConfig(
+            max_tokens=128000,
+            compression_threshold=0.85,
+            keep_recent_messages=6,
+        ))
 
     @staticmethod
     def _pick_prompt(intent_type: IntentType) -> str:
@@ -39,37 +46,63 @@ class ResponseGenerator:
             return REPO_SEARCH_PROMPT
         return GENERAL_CHAT_PROMPT
 
-    @staticmethod
     def _build_messages(
-        prompt: str, history: list | None = None
+        self,
+        prompt: str,
+        history: list | None = None,
+        context: str | None = None,
     ) -> list[dict[str, str]]:
-        """Build messages list with history context.
+        """Build messages list with history and context.
+
+        Uses ContextManager for token estimation and compression.
 
         Args:
-            prompt: The current user prompt
-            history: List of ChatTurn objects or dicts with 'role' and 'message' keys
+            prompt: The current user prompt (already formatted with context)
+            history: List of ChatTurn objects or dicts
+            context: Additional context (e.g., retrieved repos)
 
         Returns:
             List of message dicts for LLM API
         """
         messages: list[dict[str, str]] = []
 
-        # Add conversation history (keep last N turns)
+        # Build system message with context
+        system_content = "你是一个帮助用户管理 GitHub Star 仓库的智能助手。"
+        if context:
+            system_content += f"\n\n参考资料:\n{context}"
+        messages.append({"role": "system", "content": system_content})
+
+        # Add conversation history with compression if needed
         if history:
-            recent_history = history[-MAX_HISTORY_TURNS:]
-            for turn in recent_history:
-                # Support both ChatTurn dataclass and plain dict
+            history_messages = []
+            for turn in history:
                 if hasattr(turn, "role"):
                     role = "user" if turn.role == "user" else "assistant"
                     content = turn.message
                 else:
                     role = "user" if turn.get("role") == "user" else "assistant"
                     content = turn.get("message", "")
-                messages.append({"role": role, "content": content})
+                history_messages.append({"role": role, "content": content})
+
+            # Check if compression is needed
+            if self.context_manager.should_compress(history_messages):
+                history_messages = self.context_manager._compress_truncate(history_messages, None)
+                logger.info("Context compressed: %d messages", len(history_messages))
+
+            messages.extend(history_messages)
 
         # Add current prompt
         messages.append({"role": "user", "content": prompt})
         return messages
+
+    def _get_context_token_info(self, messages: list[dict[str, str]]) -> dict:
+        """Get token count info for logging."""
+        total = self.context_manager.estimate_messages_tokens(messages)
+        return {
+            "total_tokens": total,
+            "message_count": len(messages),
+            "formatted": format_token_count(total),
+        }
 
     async def generate(
         self,
@@ -78,11 +111,16 @@ class ResponseGenerator:
         built_context: BuiltContext,
         history: list | None = None,
     ) -> str:
+        context_str = built_context.prompt_context or "No repository context provided."
         prompt = self._pick_prompt(built_context.intent_type).format(
             user_message=user_message,
-            context=built_context.prompt_context or "No repository context provided.",
+            context=context_str,
         )
-        messages = self._build_messages(prompt, history)
+        messages = self._build_messages(prompt, history, context_str)
+
+        # Log token usage
+        token_info = self._get_context_token_info(messages)
+        logger.info("Generate: %s tokens, %d messages", token_info["formatted"], token_info["message_count"])
 
         try:
             return await asyncio.wait_for(
@@ -106,11 +144,16 @@ class ResponseGenerator:
         history: list | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream response tokens one by one."""
+        context_str = built_context.prompt_context or "No repository context provided."
         prompt = self._pick_prompt(built_context.intent_type).format(
             user_message=user_message,
-            context=built_context.prompt_context or "No repository context provided.",
+            context=context_str,
         )
-        messages = self._build_messages(prompt, history)
+        messages = self._build_messages(prompt, history, context_str)
+
+        # Log token usage
+        token_info = self._get_context_token_info(messages)
+        logger.info("Stream: %s tokens, %d messages", token_info["formatted"], token_info["message_count"])
 
         try:
             async for token in self.llm_client.create_chat_completion_stream(
