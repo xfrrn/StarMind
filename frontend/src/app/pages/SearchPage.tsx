@@ -1,59 +1,12 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Search, Sparkles, MessageSquare, Loader2 } from 'lucide-react';
 import { RepoCard } from '../components/RepoCard';
-import { chatSearchStream, type Repository, type StatusEvent } from '../api';
+import { useSearch } from '../hooks/useSearch';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [answer, setAnswer] = useState('');
-  const [results, setResults] = useState<Repository[]>([]);
-  const [error, setError] = useState('');
-  const [statusMessage, setStatusMessage] = useState('');
-  const abortRef = useRef<(() => void) | null>(null);
-
-  const doSearch = useCallback((searchQuery: string) => {
-    if (!searchQuery.trim()) return;
-
-    // Cancel previous stream if any
-    if (abortRef.current) {
-      abortRef.current();
-    }
-
-    setIsSearching(true);
-    setHasSearched(false);
-    setError('');
-    setAnswer('');
-    setResults([]);
-    setStatusMessage('正在分析查询...');
-
-    abortRef.current = chatSearchStream(searchQuery, {
-      onStatus: (status: StatusEvent) => {
-        setStatusMessage(status.message);
-      },
-      onRepositories: (repos) => {
-        setResults(repos);
-        setHasSearched(true);
-      },
-      onToken: (token) => {
-        setAnswer((prev) => prev + token);
-      },
-      onDone: () => {
-        setIsSearching(false);
-        setStatusMessage('');
-        abortRef.current = null;
-      },
-      onError: (err) => {
-        setError(err);
-        setIsSearching(false);
-        setStatusMessage('');
-        setHasSearched(true);
-        abortRef.current = null;
-      },
-    });
-  }, []);
+  const { state, doSearch, setQuery, reset } = useSearch();
+  const { query, isSearching, hasSearched, answer, results, error, statusMessage } = state;
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -61,13 +14,9 @@ export function SearchPage() {
   }, [query, doSearch]);
 
   // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      if (abortRef.current) {
-        abortRef.current();
-      }
-    };
-  }, []);
+  useEffect(() => {
+    return () => reset();
+  }, [reset]);
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-6">
