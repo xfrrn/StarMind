@@ -143,6 +143,66 @@ export function chatSearchStream(query: string, callbacks: StreamCallbacks): () 
     return () => controller.abort();
 }
 
+// ---- Conversations ----
+
+export interface Conversation {
+    id: string;
+    title: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+    messageCount: number;
+    lastMessage: string;
+}
+
+export interface Message {
+    id: number;
+    conversationId: string;
+    role: string;
+    content: string;
+    createdAt: string | null;
+}
+
+export interface ConversationDetail extends Conversation {
+    messages: Message[];
+}
+
+export async function listConversations(limit = 20, offset = 0): Promise<Conversation[]> {
+    const resp = await fetch(`${API_BASE}/conversations?limit=${limit}&offset=${offset}`);
+    if (!resp.ok) throw new Error(`Failed to list conversations: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function createConversation(title = ''): Promise<Conversation> {
+    const resp = await fetch(`${API_BASE}/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+    });
+    if (!resp.ok) throw new Error(`Failed to create conversation: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function getConversation(id: string): Promise<ConversationDetail> {
+    const resp = await fetch(`${API_BASE}/conversations/${id}`);
+    if (!resp.ok) throw new Error(`Failed to get conversation: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(`Failed to delete conversation: ${resp.statusText}`);
+}
+
+export async function addMessage(conversationId: string, role: string, content: string): Promise<Message> {
+    const resp = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, content }),
+    });
+    if (!resp.ok) throw new Error(`Failed to add message: ${resp.statusText}`);
+    return resp.json();
+}
+
 // ---- Repositories ----
 
 export interface RepoListResponse {

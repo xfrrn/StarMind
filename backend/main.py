@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
-from routers import chat, repositories, sync, settings
+from routers import chat, conversations, repositories, sync, settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +44,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(chat.router)
+app.include_router(conversations.router)
 app.include_router(repositories.router)
 app.include_router(sync.router)
 app.include_router(settings.router)
