@@ -5,17 +5,57 @@
 import type { Repository } from './data';
 
 const API_BASE = '/api';
+
+// Cache configuration
+const MAX_CACHE_SIZE = 100;
 const inflightGetRequests = new Map<string, Promise<unknown>>();
 const getResponseCache = new Map<string, { expiresAt: number; data: unknown }>();
 
+// Cache key generation for consistent hashing
+function generateCacheKey(url: string): string {
+    return url;
+}
+
+// Evict oldest entries when cache is full
+function evictIfNeeded(): void {
+    if (getResponseCache.size >= MAX_CACHE_SIZE) {
+        // Remove oldest 20% of entries
+        const entriesToRemove = Math.floor(MAX_CACHE_SIZE * 0.2);
+        const entries = Array.from(getResponseCache.entries());
+        // Sort by expiresAt and remove oldest
+        entries.sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+        for (let i = 0; i < entriesToRemove; i++) {
+            getResponseCache.delete(entries[i][0]);
+        }
+    }
+}
+
+// Clear cache for specific patterns or entire cache
+export function clearApiCache(pattern?: string): void {
+    if (!pattern) {
+        getResponseCache.clear();
+        return;
+    }
+    // Clear entries matching pattern
+    for (const key of getResponseCache.keys()) {
+        if (key.includes(pattern)) {
+            getResponseCache.delete(key);
+        }
+    }
+}
+
 async function fetchJsonGet<T>(url: string, cacheTtlMs = 0): Promise<T> {
+    const cacheKey = generateCacheKey(url);
     const now = Date.now();
-    const cached = getResponseCache.get(url);
+
+    // Check cache
+    const cached = getResponseCache.get(cacheKey);
     if (cached && cached.expiresAt > now) {
         return cached.data as T;
     }
 
-    const inflight = inflightGetRequests.get(url);
+    // Deduplicate in-flight requests
+    const inflight = inflightGetRequests.get(cacheKey);
     if (inflight) {
         return inflight as Promise<T>;
     }
@@ -27,16 +67,17 @@ async function fetchJsonGet<T>(url: string, cacheTtlMs = 0): Promise<T> {
         }
         const data = (await resp.json()) as T;
         if (cacheTtlMs > 0) {
-            getResponseCache.set(url, { expiresAt: now + cacheTtlMs, data });
+            evictIfNeeded();
+            getResponseCache.set(cacheKey, { expiresAt: now + cacheTtlMs, data });
         }
         return data;
     })();
 
-    inflightGetRequests.set(url, request);
+    inflightGetRequests.set(cacheKey, request);
     try {
         return await request;
     } finally {
-        inflightGetRequests.delete(url);
+        inflightGetRequests.delete(cacheKey);
     }
 }
 
@@ -223,6 +264,13 @@ export interface RepoFilters {
     limit?: number;
 }
 
+// Default cache TTLs for different data types
+const CACHE_TTL = {
+    stats: 30_000,      // 30 seconds - stats change rarely
+    repository: 60_000, // 60 seconds - repo details are stable
+    repos: 0,           // No caching for list - filters change frequently
+};
+
 export async function fetchRepositories(filters: RepoFilters = {}): Promise<RepoListResponse> {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
@@ -230,11 +278,11 @@ export async function fetchRepositories(filters: RepoFilters = {}): Promise<Repo
             params.set(key, String(value));
         }
     });
-    return fetchJsonGet<RepoListResponse>(`${API_BASE}/repositories?${params}`);
+    return fetchJsonGet<RepoListResponse>(`${API_BASE}/repositories?${params}`, CACHE_TTL.repos);
 }
 
 export async function fetchRepository(id: string): Promise<Repository> {
-    return fetchJsonGet<Repository>(`${API_BASE}/repositories/${id}`);
+    return fetchJsonGet<Repository>(`${API_BASE}/repositories/${id}`, CACHE_TTL.repository);
 }
 
 // ---- Stats ----
@@ -246,7 +294,7 @@ export interface StatsResponse {
 }
 
 export async function fetchStats(): Promise<StatsResponse> {
-    return fetchJsonGet<StatsResponse>(`${API_BASE}/stats`, 10_000);
+    return fetchJsonGet<StatsResponse>(`${API_BASE}/stats`, CACHE_TTL.stats);
 }
 
 // ---- Sync ----
