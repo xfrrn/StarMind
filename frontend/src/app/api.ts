@@ -57,6 +57,80 @@ export async function chatSearch(query: string): Promise<ChatResponse> {
     return resp.json();
 }
 
+export interface StreamCallbacks {
+    onRepositories: (repos: Repository[]) => void;
+    onToken: (token: string) => void;
+    onDone: () => void;
+    onError: (error: string) => void;
+}
+
+export function chatSearchStream(query: string, callbacks: StreamCallbacks): () => void {
+    const controller = new AbortController();
+
+    (async () => {
+        try {
+            const resp = await fetch(`${API_BASE}/chat/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+                signal: controller.signal,
+            });
+
+            if (!resp.ok) {
+                callbacks.onError(`Chat failed: ${resp.statusText}`);
+                return;
+            }
+
+            const reader = resp.body?.getReader();
+            if (!reader) {
+                callbacks.onError('No response body');
+                return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                let eventType = '';
+                for (const line of lines) {
+                    if (line.startsWith('event:')) {
+                        eventType = line.slice(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        const data = line.slice(5).trim();
+                        if (eventType === 'repositories') {
+                            try {
+                                callbacks.onRepositories(JSON.parse(data));
+                            } catch {
+                                /* ignore parse errors */
+                            }
+                        } else if (eventType === 'token') {
+                            // Unescape newlines
+                            callbacks.onToken(data.replace(/\\n/g, '\n'));
+                        } else if (eventType === 'done') {
+                            callbacks.onDone();
+                        } else if (eventType === 'error') {
+                            callbacks.onError(data);
+                        }
+                    }
+                }
+            }
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                callbacks.onError(err.message || 'Stream failed');
+            }
+        }
+    })();
+
+    return () => controller.abort();
+}
+
 // ---- Repositories ----
 
 export interface RepoListResponse {

@@ -1,6 +1,7 @@
 """Chat router - AI-powered semantic search endpoint."""
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
@@ -24,3 +25,28 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         "answer": payload.answer,
         "repositories": payload.repositories,
     }
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)):
+    """AI-powered semantic search with streaming response via SSE."""
+    service = get_chat_service()
+
+    async def event_generator():
+        async for event in service.chat_stream(
+            db,
+            user_message=request.query,
+            session_id=request.session_id,
+            history=[turn.model_dump() for turn in request.history],
+        ):
+            yield event
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

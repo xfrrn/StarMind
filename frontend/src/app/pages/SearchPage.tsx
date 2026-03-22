@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Search, Sparkles, MessageSquare } from 'lucide-react';
 import { RepoCard } from '../components/RepoCard';
-import { chatSearch, type ChatResponse } from '../api';
+import { chatSearchStream, type Repository } from '../api';
 import { motion, AnimatePresence } from 'motion/react';
-import type { Repository } from '../data';
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
@@ -12,27 +11,56 @@ export function SearchPage() {
   const [answer, setAnswer] = useState('');
   const [results, setResults] = useState<Repository[]>([]);
   const [error, setError] = useState('');
+  const abortRef = useRef<(() => void) | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const doSearch = useCallback((searchQuery: string) => {
+    if (!searchQuery.trim()) return;
+
+    // Cancel previous stream if any
+    if (abortRef.current) {
+      abortRef.current();
+    }
 
     setIsSearching(true);
     setHasSearched(false);
     setError('');
+    setAnswer('');
+    setResults([]);
 
-    try {
-      const data: ChatResponse = await chatSearch(query);
-      setAnswer(data.answer);
-      setResults(data.repositories);
-      setHasSearched(true);
-    } catch (err: any) {
-      setError(err.message || 'Search failed');
-      setHasSearched(true);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    abortRef.current = chatSearchStream(searchQuery, {
+      onRepositories: (repos) => {
+        setResults(repos);
+        setHasSearched(true);
+      },
+      onToken: (token) => {
+        setAnswer((prev) => prev + token);
+      },
+      onDone: () => {
+        setIsSearching(false);
+        abortRef.current = null;
+      },
+      onError: (err) => {
+        setError(err);
+        setIsSearching(false);
+        setHasSearched(true);
+        abortRef.current = null;
+      },
+    });
+  }, []);
+
+  const handleSearch = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    doSearch(query);
+  }, [query, doSearch]);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current();
+      }
+    };
+  }, []);
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-6">
@@ -144,7 +172,7 @@ export function SearchPage() {
                 key={suggestion}
                 onClick={() => {
                   setQuery(suggestion);
-                  handleSearch({ preventDefault: () => { } } as React.FormEvent);
+                  doSearch(suggestion);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-sm text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all"
               >

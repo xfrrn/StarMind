@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 
 from core.llm import LLMClient
 from services.chat.exceptions import GenerationError
@@ -52,6 +53,25 @@ class ResponseGenerator:
             )
         except Exception as e:
             logger.error("Chat response generation failed: %s", e)
+            raise GenerationError(str(e)) from e
+
+    async def generate_stream(
+        self, *, user_message: str, built_context: BuiltContext
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens one by one."""
+        prompt = self._pick_prompt(built_context.intent_type).format(
+            user_message=user_message,
+            context=built_context.prompt_context or "No repository context provided.",
+        )
+        try:
+            async for token in self.llm_client.create_chat_completion_stream(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.35,
+                max_tokens=900,
+            ):
+                yield token
+        except Exception as e:
+            logger.error("Chat response streaming failed: %s", e)
             raise GenerationError(str(e)) from e
 
     @staticmethod

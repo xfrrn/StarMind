@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncGenerator
 from time import perf_counter
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,6 +127,108 @@ class ChatService:
             elapsed_ms=elapsed_ms,
         )
         return payload
+
+    async def chat_stream(
+        self,
+        db: AsyncSession,
+        user_message: str,
+        session_id: str | None = None,
+        history: list | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat response with SSE format.
+
+        Yields SSE events:
+        - event: repositories, data: JSON array of repositories
+        - event: token, data: text chunk
+        - event: done, data: empty
+        - event: error, data: error message (on failure)
+        """
+        started_at = perf_counter()
+        request = ChatRequestModel(
+            user_message=user_message,
+            session_id=session_id,
+            history=history or [],
+        )
+        telemetry = RetrievalTelemetry()
+
+        # 1. Intent routing
+        intent = self.intent_router.route(request.user_message)
+
+        # 2. Query parsing
+        parsed_query = self.query_parser.parse(request.user_message, intent.intent_type)
+
+        # 3. Retrieval planning
+        plan = self.retrieval_planner.build_plan(intent, parsed_query)
+
+        # 4. Query rewriting
+        rewrite_queries: list[str] = []
+        if self.policy.enable_query_rewrite:
+            rewrite_queries = self.query_rewriter.rewrite(parsed_query)
+
+        # 5. Retrieval
+        ranked = []
+        if intent.needs_retrieval:
+            try:
+                candidates, used_paths = await self.retrieval_service.hybrid_search(
+                    db,
+                    parsed_query=parsed_query,
+                    plan=plan,
+                    rewrite_queries=rewrite_queries,
+                )
+                telemetry.used_paths = used_paths
+                telemetry.retrieval_count = len(candidates)
+                ranked = self.reranker.rank(
+                    candidates,
+                    parsed_query=parsed_query,
+                    top_k=self.policy.max_reranked_candidates,
+                )
+                telemetry.reranked_count = len(ranked)
+            except Exception as e:
+                logger.error("Retrieval degraded in chat stream pipeline: %s", e)
+                telemetry.degraded = True
+                telemetry.notes.append(f"retrieval degraded: {e}")
+                ranked = []
+
+        # 6. Context building
+        built_context = self.context_builder.build(intent.intent_type, ranked)
+
+        # 7. Send repositories first
+        repositories = [self._to_api_repository(repo) for repo in built_context.repositories]
+        yield f"event: repositories\ndata: {json.dumps(repositories, ensure_ascii=False)}\n\n"
+
+        # 8. Stream response tokens
+        try:
+            async for token in self.response_generator.generate_stream(
+                user_message=request.user_message,
+                built_context=built_context,
+            ):
+                # Escape newlines in SSE data
+                escaped_token = token.replace("\n", "\\n")
+                yield f"event: token\ndata: {escaped_token}\n\n"
+        except Exception as e:
+            logger.error("Stream generation failed: %s", e)
+            telemetry.degraded = True
+            telemetry.notes.append(f"generation error: {e}")
+            fallback = self.response_generator.build_structured_fallback(built_context)
+            for line in fallback.split("\n"):
+                yield f"event: token\ndata: {line}\\n\n\n"
+
+        # 9. Send done event
+        yield "event: done\ndata: \n\n"
+
+        # Log telemetry
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        self._log_chat_telemetry(
+            session_id=request.session_id,
+            query=request.user_message,
+            payload=ChatResponsePayload(
+                answer="[streamed]",
+                repositories=repositories,
+                intent=intent.intent_type,
+                telemetry=telemetry,
+            ),
+            elapsed_ms=elapsed_ms,
+        )
 
     async def ask_repositories(self, db: AsyncSession, query: str, top_k: int = 5) -> dict:
         payload = await self.chat(db, query)
