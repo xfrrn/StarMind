@@ -140,6 +140,7 @@ class ChatService:
         """Stream chat response with SSE format.
 
         Yields SSE events:
+        - event: status, data: {"stage": str, "message": str}
         - event: repositories, data: JSON array of repositories
         - event: token, data: text chunk
         - event: done, data: empty
@@ -153,7 +154,12 @@ class ChatService:
         )
         telemetry = RetrievalTelemetry()
 
+        # Helper to format status events
+        def status_event(stage: str, message: str) -> str:
+            return f'event: status\ndata: {{"stage": "{stage}", "message": "{message}"}}\n\n'
+
         # 1. Intent routing
+        yield status_event("analyzing", "正在分析查询意图...")
         intent = self.intent_router.route(request.user_message)
 
         # 2. Query parsing
@@ -168,6 +174,7 @@ class ChatService:
             rewrite_queries = self.query_rewriter.rewrite(parsed_query)
 
         # 5. Retrieval
+        yield status_event("retrieving", "正在搜索相关仓库...")
         ranked = []
         if intent.needs_retrieval:
             try:
@@ -199,6 +206,7 @@ class ChatService:
         yield f"event: repositories\ndata: {json.dumps(repositories, ensure_ascii=False)}\n\n"
 
         # 8. Stream response tokens
+        yield status_event("generating", "正在生成回答...")
         try:
             async for token in self.response_generator.generate_stream(
                 user_message=request.user_message,

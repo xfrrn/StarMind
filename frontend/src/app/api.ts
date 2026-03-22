@@ -57,7 +57,13 @@ export async function chatSearch(query: string): Promise<ChatResponse> {
     return resp.json();
 }
 
+export interface StatusEvent {
+    stage: string;
+    message: string;
+}
+
 export interface StreamCallbacks {
+    onStatus?: (status: StatusEvent) => void;
     onRepositories: (repos: Repository[]) => void;
     onToken: (token: string) => void;
     onDone: () => void;
@@ -104,7 +110,13 @@ export function chatSearchStream(query: string, callbacks: StreamCallbacks): () 
                         eventType = line.slice(6).trim();
                     } else if (line.startsWith('data:')) {
                         const data = line.slice(5).trim();
-                        if (eventType === 'repositories') {
+                        if (eventType === 'status') {
+                            try {
+                                callbacks.onStatus?.(JSON.parse(data));
+                            } catch {
+                                /* ignore parse errors */
+                            }
+                        } else if (eventType === 'repositories') {
                             try {
                                 callbacks.onRepositories(JSON.parse(data));
                             } catch {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Search, Sparkles, MessageSquare } from 'lucide-react';
+import { Search, Sparkles, MessageSquare, Loader2 } from 'lucide-react';
 import { RepoCard } from '../components/RepoCard';
-import { chatSearchStream, type Repository } from '../api';
+import { chatSearchStream, type Repository, type StatusEvent } from '../api';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SearchPage() {
@@ -11,6 +11,7 @@ export function SearchPage() {
   const [answer, setAnswer] = useState('');
   const [results, setResults] = useState<Repository[]>([]);
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const abortRef = useRef<(() => void) | null>(null);
 
   const doSearch = useCallback((searchQuery: string) => {
@@ -26,8 +27,12 @@ export function SearchPage() {
     setError('');
     setAnswer('');
     setResults([]);
+    setStatusMessage('正在分析查询...');
 
     abortRef.current = chatSearchStream(searchQuery, {
+      onStatus: (status: StatusEvent) => {
+        setStatusMessage(status.message);
+      },
       onRepositories: (repos) => {
         setResults(repos);
         setHasSearched(true);
@@ -37,11 +42,13 @@ export function SearchPage() {
       },
       onDone: () => {
         setIsSearching(false);
+        setStatusMessage('');
         abortRef.current = null;
       },
       onError: (err) => {
         setError(err);
         setIsSearching(false);
+        setStatusMessage('');
         setHasSearched(true);
         abortRef.current = null;
       },
@@ -155,6 +162,20 @@ export function SearchPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Loading status indicator */}
+      {isSearching && !hasSearched && statusMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-12 flex flex-col items-center justify-center gap-4"
+        >
+          <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-400">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-lg">{statusMessage}</span>
+          </div>
+        </motion.div>
+      )}
 
       {!hasSearched && !isSearching && (
         <div className="mt-20">
