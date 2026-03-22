@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 
 from core.llm import LLMClient
 from services.chat.exceptions import GenerationError
-from services.chat.models import BuiltContext
+from services.chat.models import BuiltContext, ChatTurn
 from services.chat.prompts import (
     GENERAL_CHAT_PROMPT,
     REPO_ANALYSIS_PROMPT,
@@ -17,6 +17,9 @@ from services.chat.prompts import (
 from services.chat.types import IntentType
 
 logger = logging.getLogger(__name__)
+
+# Maximum history turns to include in context
+MAX_HISTORY_TURNS = 10
 
 
 class ResponseGenerator:
@@ -36,15 +39,55 @@ class ResponseGenerator:
             return REPO_SEARCH_PROMPT
         return GENERAL_CHAT_PROMPT
 
-    async def generate(self, *, user_message: str, built_context: BuiltContext) -> str:
+    @staticmethod
+    def _build_messages(
+        prompt: str, history: list | None = None
+    ) -> list[dict[str, str]]:
+        """Build messages list with history context.
+
+        Args:
+            prompt: The current user prompt
+            history: List of ChatTurn objects or dicts with 'role' and 'message' keys
+
+        Returns:
+            List of message dicts for LLM API
+        """
+        messages: list[dict[str, str]] = []
+
+        # Add conversation history (keep last N turns)
+        if history:
+            recent_history = history[-MAX_HISTORY_TURNS:]
+            for turn in recent_history:
+                # Support both ChatTurn dataclass and plain dict
+                if hasattr(turn, "role"):
+                    role = "user" if turn.role == "user" else "assistant"
+                    content = turn.message
+                else:
+                    role = "user" if turn.get("role") == "user" else "assistant"
+                    content = turn.get("message", "")
+                messages.append({"role": role, "content": content})
+
+        # Add current prompt
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
+    async def generate(
+        self,
+        *,
+        user_message: str,
+        built_context: BuiltContext,
+        history: list | None = None,
+    ) -> str:
         prompt = self._pick_prompt(built_context.intent_type).format(
             user_message=user_message,
             context=built_context.prompt_context or "No repository context provided.",
         )
+        messages = self._build_messages(prompt, history)
+
         try:
             return await asyncio.wait_for(
                 self.llm_client.create_chat_completion(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     temperature=0.35,
                     max_tokens=900,
                     enforce_json=False,
@@ -56,16 +99,22 @@ class ResponseGenerator:
             raise GenerationError(str(e)) from e
 
     async def generate_stream(
-        self, *, user_message: str, built_context: BuiltContext
+        self,
+        *,
+        user_message: str,
+        built_context: BuiltContext,
+        history: list | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream response tokens one by one."""
         prompt = self._pick_prompt(built_context.intent_type).format(
             user_message=user_message,
             context=built_context.prompt_context or "No repository context provided.",
         )
+        messages = self._build_messages(prompt, history)
+
         try:
             async for token in self.llm_client.create_chat_completion_stream(
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
                 temperature=0.35,
                 max_tokens=900,
             ):

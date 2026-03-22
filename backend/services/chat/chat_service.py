@@ -16,6 +16,7 @@ from services.chat.models import (
     BuiltContext,
     ChatRequestModel,
     ChatResponsePayload,
+    ChatTurn,
     RetrievalTelemetry,
 )
 from services.chat.policies import ChatPolicy
@@ -106,6 +107,7 @@ class ChatService:
             answer = await self.response_generator.generate(
                 user_message=request.user_message,
                 built_context=built_context,
+                history=request.history,
             )
         except Exception as e:
             telemetry.degraded = True
@@ -201,6 +203,7 @@ class ChatService:
             async for token in self.response_generator.generate_stream(
                 user_message=request.user_message,
                 built_context=built_context,
+                history=request.history,
             ):
                 # Escape newlines in SSE data
                 escaped_token = token.replace("\n", "\\n")
