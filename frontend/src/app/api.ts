@@ -424,3 +424,29 @@ export async function testOpenaiConnection(): Promise<TestConnectionResponse> {
     if (!resp.ok) throw new Error(`Test OpenAI failed: ${resp.statusText}`);
     return resp.json();
 }
+
+// ---- Repo Chat ----
+
+export interface RepoChatTurn {
+    role: 'user' | 'assistant';
+    message: string;
+}
+
+export interface RepoChatResponse {
+    answer: string;
+    repo: Repository;
+}
+
+export async function chatWithRepo(
+    repoId: string,
+    message: string,
+    history: RepoChatTurn[] = []
+): Promise<RepoChatResponse> {
+    const resp = await fetch(`${API_BASE}/chat/repo/${repoId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, history }),
+    });
+    if (!resp.ok) throw new Error(`Chat failed: ${resp.statusText}`);
+    return resp.json();
+}

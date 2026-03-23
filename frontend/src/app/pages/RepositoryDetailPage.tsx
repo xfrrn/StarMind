@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router';
-import { ArrowLeft, Star, GitFork, Eye, Globe, Github, Terminal, Activity, FileText } from 'lucide-react';
+import { useParams, Link, useSearchParams } from 'react-router';
+import { ArrowLeft, Star, GitFork, Eye, Globe, Github, Terminal, Activity, FileText, MessageSquare } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
 import { fetchRepository } from '../api';
+import { RepoChat } from '../components/RepoChat';
 import type { Repository } from '../data';
 
 function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): string {
@@ -29,9 +30,12 @@ function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): strin
 
 export function RepositoryDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const [repo, setRepo] = useState<Repository | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const autoFocusChat = searchParams.get('chat') === 'true';
 
   useEffect(() => {
     if (!id) return;
@@ -133,6 +137,11 @@ export function RepositoryDetailPage() {
             <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed relative z-10 text-base md:text-lg">
               {repo.aiReason || "No AI summary available yet. Trigger a sync to generate one."}
             </p>
+          </section>
+
+          {/* Repo Chat Section */}
+          <section>
+            <RepoChat repoId={id!} repo={repo} autoFocus={autoFocusChat} />
           </section>
 
           {/* Readme Content */}

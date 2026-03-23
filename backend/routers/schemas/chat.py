@@ -34,3 +34,31 @@ class RepositoryResponse(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     repositories: list[RepositoryResponse]
+
+
+class RepoChatRequest(BaseModel):
+    """Request for repository-specific chat."""
+
+    message: str
+    history: list[ChatTurn] = Field(default_factory=list)
+
+
+class RepoChatResponse(BaseModel):
+    """Response for repository-specific chat."""
+
+    answer: str
+    repo: RepositoryResponse
+
+
+class RepoChatRequest(BaseModel):
+    """Request for repository-specific chat."""
+
+    message: str
+    history: list[ChatTurn] = Field(default_factory=list)
+
+
+class RepoChatResponse(BaseModel):
+    """Response for repository-specific chat."""
+
+    answer: str
+    repo: RepositoryResponse

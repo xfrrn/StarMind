@@ -5,8 +5,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
-from routers.schemas import ChatRequest, ChatResponse
-from services.service_registry import get_chat_service
+from routers.schemas import ChatRequest, ChatResponse, RepoChatRequest, RepoChatResponse
+from routers.mappers.chat import to_repository_response
+from services.service_registry import get_chat_service, get_repo_chat_service
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -50,3 +51,32 @@ async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/chat/repo/{repo_id}", response_model=RepoChatResponse)
+async def chat_repo(
+    repo_id: int,
+    request: RepoChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Chat about a specific repository.
+
+    Args:
+        repo_id: Repository ID
+        request: Chat request with message and optional history
+        db: Database session
+
+    Returns:
+        RepoChatResponse with answer and repo info
+    """
+    service = get_repo_chat_service()
+    result = await service.chat(
+        db,
+        repo_id=repo_id,
+        message=request.message,
+        history=[turn.model_dump() for turn in request.history],
+    )
+    return {
+        "answer": result.answer,
+        "repo": to_repository_response(result.repo),
+    }

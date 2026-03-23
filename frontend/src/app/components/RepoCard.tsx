@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Star, Github, ArrowRight, Activity, Terminal } from 'lucide-react';
+import { Star, Github, ArrowRight, Activity, Terminal, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -72,13 +72,22 @@ export const RepoCard = memo(function RepoCard({ repo, showAiReason = false }: R
           </div>
         </div>
 
-        <Link
-          to={`/repositories/${repo.id}`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          Details
-          <ArrowRight className="w-4 h-4" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/repositories/${repo.id}?chat=true`}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <MessageSquare className="w-4 h-4" />
+            Chat
+          </Link>
+          <Link
+            to={`/repositories/${repo.id}`}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            Details
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
     </div>
   );
