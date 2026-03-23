@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { Search, Sparkles, MessageSquare, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { RepoCard } from '../components/RepoCard';
 import { useSearch } from '../hooks/useSearch';
 import { motion, AnimatePresence } from 'motion/react';
@@ -78,8 +80,10 @@ export function SearchPage() {
                       AI Summary
                     </h2>
                   </div>
-                  <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                    {answer}
+                  <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {answer}
+                    </ReactMarkdown>
                   </div>
                 </div>
 

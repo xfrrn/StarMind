@@ -1,6 +1,8 @@
 import React, { memo } from 'react';
 import { Star, Github, ArrowRight, Activity, Terminal } from 'lucide-react';
 import { Link } from 'react-router';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Repository } from '../data';
 import { Badge } from './Badge';
 
@@ -37,7 +39,11 @@ export const RepoCard = memo(function RepoCard({ repo, showAiReason = false }: R
           <div className="mt-4 mb-4 p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg">
             <div className="flex gap-2 text-sm text-blue-900 dark:text-blue-200">
               <SparklesIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
-              <p className="leading-relaxed">{repo.aiReason}</p>
+              <div className="leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {repo.aiReason}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
         )}
