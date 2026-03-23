@@ -1,7 +1,13 @@
 import React from 'react';
-import { RefreshCw, Github } from 'lucide-react';
+import { RefreshCw, Github, ExternalLink } from 'lucide-react';
+
+const GITHUB_PAT_URL = 'https://github.com/settings/personal-access-tokens';
 
 export function Header() {
+  const handleConnectGitHub = () => {
+    window.open(GITHUB_PAT_URL, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <header className="h-16 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-4">
@@ -20,9 +26,13 @@ export function Header() {
           <RefreshCw className="w-3.5 h-3.5" />
           Sync Now
         </button>
-        <button className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-sm">
+        <button
+          onClick={handleConnectGitHub}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-sm"
+        >
           <Github className="w-3.5 h-3.5" />
           Connect GitHub
+          <ExternalLink className="w-3 h-3 opacity-60" />
         </button>
       </div>
     </header>
