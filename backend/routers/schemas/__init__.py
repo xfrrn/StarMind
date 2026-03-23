@@ -1,6 +1,6 @@
 from .chat import ChatRequest, ChatResponse, RepositoryResponse
 from .repositories import RepoListResponse, RepoOut, StatsResponse
-from .settings import SettingsResponse, SettingsUpdate
+from .settings import SettingsResponse, SettingsUpdate, TestConnectionResponse
 from .sync import SyncStatusResponse, SyncTriggerResponse
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     "StatsResponse",
     "SyncStatusResponse",
     "SyncTriggerResponse",
+    "TestConnectionResponse",
 ]

@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # Enable LLM verification after threshold filtering
     chat_llm_filter_enabled: bool = True
 
+    # Security
+    # Encryption key for sensitive data (Fernet key, 44 chars)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = ""
+
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/starmind"
 

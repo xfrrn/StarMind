@@ -346,12 +346,51 @@ export const getSyncStatus = async (): Promise<SyncStatusResponse> => {
 // ---- Settings ----
 
 export interface SettingsData {
+    // User Info
     github_username: string;
-    auto_summarize: boolean;
-    include_readmes: boolean;
     first_name: string;
     last_name: string;
     email: string;
+    // API Keys (masked)
+    github_token_set: boolean;
+    github_token_masked: string;
+    openai_api_key_set: boolean;
+    openai_api_key_masked: string;
+    openai_base_url: string;
+    openai_model: string;
+    // Chat Retrieval
+    chat_similarity_threshold: number;
+    chat_llm_filter_enabled: boolean;
+    // Sync Configuration
+    github_sync_page_concurrency: number;
+    github_readme_concurrency: number;
+    ai_analysis_concurrency: number;
+    // Feature Toggles
+    auto_summarize: boolean;
+    include_readmes: boolean;
+}
+
+export interface SettingsUpdate {
+    github_username?: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    github_token?: string;
+    openai_api_key?: string;
+    openai_base_url?: string;
+    openai_model?: string;
+    chat_similarity_threshold?: number;
+    chat_llm_filter_enabled?: boolean;
+    github_sync_page_concurrency?: number;
+    github_readme_concurrency?: number;
+    ai_analysis_concurrency?: number;
+    auto_summarize?: boolean;
+    include_readmes?: boolean;
+}
+
+export interface TestConnectionResponse {
+    success: boolean;
+    message: string;
 }
 
 export async function fetchSettings(): Promise<SettingsData> {
@@ -360,12 +399,28 @@ export async function fetchSettings(): Promise<SettingsData> {
     return resp.json();
 }
 
-export async function updateSettings(data: Partial<SettingsData>): Promise<SettingsData> {
+export async function updateSettings(data: SettingsUpdate): Promise<SettingsData> {
     const resp = await fetch(`${API_BASE}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(`Update settings failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function testGithubConnection(): Promise<TestConnectionResponse> {
+    const resp = await fetch(`${API_BASE}/settings/test-github`, {
+        method: 'POST',
+    });
+    if (!resp.ok) throw new Error(`Test GitHub failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function testOpenaiConnection(): Promise<TestConnectionResponse> {
+    const resp = await fetch(`${API_BASE}/settings/test-openai`, {
+        method: 'POST',
+    });
+    if (!resp.ok) throw new Error(`Test OpenAI failed: ${resp.statusText}`);
     return resp.json();
 }
