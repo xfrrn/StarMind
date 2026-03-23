@@ -35,7 +35,7 @@ class SyncService:
         self.readme_cleaner = readme_cleaner or ReadmeCleaner()
         self.state_transition_service = state_transition_service or StateTransitionService()
 
-    async def run_sync(self, db: AsyncSession, github_token: str) -> SyncLog:
+    async def run_sync(self, db: AsyncSession, github_token: str, full_sync: bool = False) -> SyncLog:
         if self.runtime_state.get_sync_status()["is_syncing"]:
             raise RuntimeError("A sync is already in progress")
 
@@ -49,17 +49,18 @@ class SyncService:
         try:
             syncer = GitHubSyncer(github_token)
 
-            last_sync = await db.execute(select(func.max(Repository.synced_at)))
-            last_sync_time = last_sync.scalar()
+            # Always fetch all repos (no time filter)
+            # Difference: full_sync resets AI analysis, incremental only updates basic info
+            logger.info("Sync mode: %s", "full" if full_sync else "incremental")
 
             starred_repos = await syncer.fetch_starred_repos(
-                since=last_sync_time,
+                since=None,  # Always get all repos
                 concurrency=self.settings.github_sync_page_concurrency,
             )
             self.runtime_state.set_total(len(starred_repos))
 
             if not starred_repos:
-                log.details = "No new starred repositories found."
+                log.details = "No starred repositories found."
                 log.finished_at = datetime.utcnow()
                 db.add(log)
                 await db.commit()
@@ -95,6 +96,7 @@ class SyncService:
 
                 if existing_repo:
                     self.state_transition_service.ensure_defaults(existing_repo)
+                    # Always update basic info
                     existing_repo.name = repo_data["name"]
                     existing_repo.description = repo_data["description"]
                     existing_repo.stars = repo_data["stars"]
@@ -102,30 +104,34 @@ class SyncService:
                     existing_repo.topics = repo_data.get("topics", [])
                     existing_repo.url = repo_data["url"]
                     existing_repo.homepage = repo_data.get("homepage", "")
-                    existing_repo.readme = readme
-                    existing_repo.readme_for_analysis = readme_for_analysis
-                    existing_repo.readme_for_embedding = readme_for_embedding
-                    existing_repo.cleaning_version = "v1"
                     existing_repo.updated_at = updated_at
                     existing_repo.last_updated = format_relative_time(updated_at)
                     existing_repo.synced_at = datetime.utcnow()
-                    existing_repo.category = "Pending Analysis"
-                    existing_repo.tags = []
-                    existing_repo.ai_summary = ""
-                    existing_repo.has_ui = False
-                    existing_repo.has_api = False
-                    existing_repo.activity_level = "Medium"
-                    existing_repo.embedding = None
-                    existing_repo.repo_metadata_embedding = None
-                    existing_repo.readme_embedding = None
-                    existing_repo.metadata_hash = ""
-                    existing_repo.readme_hash = ""
-                    existing_repo.embedding_version = ""
-                    existing_repo.embedding_updated_at = None
-                    existing_repo.analyze_status = "pending"
-                    existing_repo.embedding_status = "pending"
-                    existing_repo.last_error_code = ""
-                    existing_repo.last_error_detail = ""
+
+                    # Full sync: reset AI analysis and embeddings
+                    if full_sync:
+                        existing_repo.readme = readme
+                        existing_repo.readme_for_analysis = readme_for_analysis
+                        existing_repo.readme_for_embedding = readme_for_embedding
+                        existing_repo.cleaning_version = "v1"
+                        existing_repo.category = "Pending Analysis"
+                        existing_repo.tags = []
+                        existing_repo.ai_summary = ""
+                        existing_repo.has_ui = False
+                        existing_repo.has_api = False
+                        existing_repo.activity_level = "Medium"
+                        existing_repo.embedding = None
+                        existing_repo.repo_metadata_embedding = None
+                        existing_repo.readme_embedding = None
+                        existing_repo.metadata_hash = ""
+                        existing_repo.readme_hash = ""
+                        existing_repo.embedding_version = ""
+                        existing_repo.embedding_updated_at = None
+                        existing_repo.analyze_status = "pending"
+                        existing_repo.embedding_status = "pending"
+                        existing_repo.last_error_code = ""
+                        existing_repo.last_error_detail = ""
+
                     try:
                         db.add(
                             self.state_transition_service.transition(
@@ -194,11 +200,10 @@ class SyncService:
 
             log.new_repos = new_count
             log.updated_repos = updated_count
+            sync_type = "Full sync" if full_sync else "Incremental sync"
             log.details = (
-                f"Synced {new_count} new starred repositories. "
-                f"Updated {updated_count} existing records. "
-                f"GitHub page concurrency={max(1, self.settings.github_sync_page_concurrency)}, "
-                f"README concurrency={max(1, self.settings.github_readme_concurrency)}."
+                f"{sync_type}: {new_count} new, {updated_count} updated. "
+                f"(concurrency: page={self.settings.github_sync_page_concurrency}, readme={self.settings.github_readme_concurrency})"
             )
             log.finished_at = datetime.utcnow()
 

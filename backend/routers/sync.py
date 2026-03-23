@@ -1,6 +1,6 @@
 """Sync router - trigger sync and view status/history."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import async_session, get_db
@@ -10,9 +10,9 @@ from services.service_registry import get_sync_service
 router = APIRouter(prefix="/api", tags=["sync"])
 
 
-async def _run_sync_background(github_token: str):
+async def _run_sync_background(github_token: str, full_sync: bool = False):
     async with async_session() as db:
-        await get_sync_service().run_sync(db, github_token)
+        await get_sync_service().run_sync(db, github_token, full_sync=full_sync)
 
 
 async def _run_analysis_background():
@@ -21,14 +21,21 @@ async def _run_analysis_background():
 
 
 @router.post("/sync", response_model=SyncTriggerResponse)
-async def trigger_sync(background_tasks: BackgroundTasks):
+async def trigger_sync(
+    background_tasks: BackgroundTasks,
+    full_sync: bool = Query(False, description="Force full sync instead of incremental"),
+):
     """Trigger a sync of starred repositories."""
     service = get_sync_service()
     validation = service.validate_sync_trigger()
     if validation:
         return validation
 
-    background_tasks.add_task(_run_sync_background, service.get_configured_github_token())
+    background_tasks.add_task(
+        _run_sync_background,
+        service.get_configured_github_token(),
+        full_sync,
+    )
     return {"message": "Sync started successfully.", "status": "started"}
 
 

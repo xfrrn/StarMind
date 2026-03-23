@@ -23,11 +23,16 @@ def normalize_html_fragments(raw_readme: str) -> str:
 
     # Expand details/summary blocks as plain text while dropping tags.
     def _details_repl(match: re.Match[str]) -> str:
-        soup = BeautifulSoup(match.group(0), "html.parser")
-        for img in soup.find_all("img"):
-            img.decompose()
-        extracted = soup.get_text("\n", strip=True)
-        return f"\n{extracted}\n" if extracted else "\n"
+        try:
+            soup = BeautifulSoup(match.group(0), "html.parser")
+            for img in soup.find_all("img"):
+                img.decompose()
+            extracted = soup.get_text("\n", strip=True)
+            return f"\n{extracted}\n" if extracted else "\n"
+        except Exception:
+            # Fallback: strip HTML tags with regex if parser fails
+            cleaned = re.sub(r"<[^>]+>", " ", match.group(0))
+            return f"\n{cleaned.strip()}\n" if cleaned.strip() else "\n"
 
     text = re.sub(
         r"<details[\s\S]*?</details>",
@@ -44,7 +49,11 @@ def normalize_html_fragments(raw_readme: str) -> str:
 def html_token_to_text(html_snippet: str) -> str:
     if not html_snippet:
         return ""
-    soup = BeautifulSoup(html_snippet, "html.parser")
-    for img in soup.find_all("img"):
-        img.decompose()
-    return soup.get_text("\n", strip=True)
+    try:
+        soup = BeautifulSoup(html_snippet, "html.parser")
+        for img in soup.find_all("img"):
+            img.decompose()
+        return soup.get_text("\n", strip=True)
+    except Exception:
+        # Fallback: strip HTML tags with regex if parser fails
+        return re.sub(r"<[^>]+>", " ", html_snippet).strip()

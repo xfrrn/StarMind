@@ -320,8 +320,9 @@ export interface SyncTriggerResponse {
     status: string;
 }
 
-export const triggerSync = async (): Promise<SyncTriggerResponse> => {
-    const response = await fetch(`${API_BASE}/sync`, {
+export const triggerSync = async (fullSync = false): Promise<SyncTriggerResponse> => {
+    const url = fullSync ? `${API_BASE}/sync?full_sync=true` : `${API_BASE}/sync`;
+    const response = await fetch(url, {
         method: 'POST',
     });
     if (!response.ok) throw new Error('Failed to trigger sync');

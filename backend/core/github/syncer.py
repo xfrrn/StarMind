@@ -53,6 +53,7 @@ class GitHubSyncer:
         since: datetime | None,
     ) -> list[dict[str, Any]]:
         repos: list[dict[str, Any]] = []
+        logger.info("Parsing page data, since=%s, data_len=%s", since, len(data) if isinstance(data, list) else 'N/A')
         for item in data:
             repo = item.get("repo", item) if isinstance(item, dict) else item
             starred_at_str = item.get("starred_at") if isinstance(item, dict) else None
@@ -60,6 +61,8 @@ class GitHubSyncer:
             if since and starred_at_str:
                 starred_at = datetime.fromisoformat(starred_at_str.replace("Z", "+00:00"))
                 if starred_at <= since:
+                    logger.info("Skipping repo %s, starred_at=%s <= since=%s",
+                                repo.get("full_name", "?"), starred_at, since)
                     continue
 
             repos.append(
@@ -76,6 +79,7 @@ class GitHubSyncer:
                     "starred_at": starred_at_str,
                 }
             )
+        logger.info("Parsed %s repos from page", len(repos))
         return repos
 
     async def fetch_starred_repos(
@@ -126,6 +130,10 @@ class GitHubSyncer:
                         return
 
             await asyncio.gather(*(worker() for _ in range(worker_count)))
+
+        logger.info("page_results: pages=%s, total_items=%s",
+                     list(page_results.keys()),
+                     sum(len(v) for v in page_results.values()))
 
         all_repos: list[dict[str, Any]] = []
         for page in sorted(page_results.keys()):

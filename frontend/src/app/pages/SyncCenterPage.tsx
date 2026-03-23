@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle, Bot } from 'lucide-react';
+import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle, Bot, Download } from 'lucide-react';
 import { triggerSync, triggerAiAnalysis, getSyncStatus, type SyncStatusResponse } from '../api';
 
 export function SyncCenterPage() {
@@ -62,11 +62,11 @@ export function SyncCenterPage() {
     };
   }, [loadStatus]);
 
-  const handleSync = async () => {
+  const handleSync = async (fullSync = false) => {
     try {
       setSyncing(true);
       setMessage('');
-      const result = await triggerSync();
+      const result = await triggerSync(fullSync);
       setMessage(result.message);
       setTimeout(loadStatus, 800);
     } catch (err: any) {
@@ -187,17 +187,26 @@ export function SyncCenterPage() {
 
         <div className="p-6 md:p-8 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-            <span><strong>1. Sync</strong> fetches latest repositories from GitHub.</span>
-            <span><strong>2. Analyze</strong> uses AI to categorize and summarize them.</span>
+            <span><strong>Incremental:</strong> Update basic info (stars, description).</span>
+            <span><strong>Full:</strong> Reset AI analysis & re-process READMEs.</span>
+            <span><strong>Analyze:</strong> Run AI categorization for pending repos.</span>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
-              onClick={handleSync}
+              onClick={() => handleSync(false)}
               disabled={syncing}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
             >
-              <Github className="w-4 h-4" />
-              Fetch from GitHub
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              Incremental Sync
+            </button>
+            <button
+              onClick={() => handleSync(true)}
+              disabled={syncing}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
+            >
+              <Download className="w-4 h-4" />
+              Full Sync
             </button>
             <button
               onClick={handleAiAnalysis}
