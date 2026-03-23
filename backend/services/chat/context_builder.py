@@ -11,6 +11,7 @@ class ContextBuilder:
         self.policy = policy
 
     def build(self, intent_type: IntentType, candidates: list[RankedRepoCandidate]) -> BuiltContext:
+        # Use filtered candidates, but cap at max_context_repos for safety
         repos = candidates[: self.policy.max_context_repos]
         lines: list[str] = []
         for idx, repo in enumerate(repos, 1):

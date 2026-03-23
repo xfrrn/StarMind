@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     ai_analysis_request_delay_seconds: float = 0.5
     ai_analysis_checkpoint_every: int = 1
 
+    # Chat Retrieval Filtering
+    # Similarity threshold for vector search (0.0-1.0). Higher = more strict.
+    chat_similarity_threshold: float = 0.5
+    # Enable LLM verification after threshold filtering
+    chat_llm_filter_enabled: bool = True
+
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/starmind"
 
