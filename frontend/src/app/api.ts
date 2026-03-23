@@ -450,3 +450,142 @@ export async function chatWithRepo(
     if (!resp.ok) throw new Error(`Chat failed: ${resp.statusText}`);
     return resp.json();
 }
+
+
+// ---- Collections ----
+
+export interface Collection {
+    id: string;
+    name: string;
+    description: string;
+    tags: string[];
+    color: string;
+    icon: string;
+    repo_count: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface CollectionCreate {
+    name: string;
+    description?: string;
+    tags?: string[];
+    color?: string;
+    icon?: string;
+}
+
+export interface CollectionUpdate {
+    name?: string;
+    description?: string;
+    tags?: string[];
+    color?: string;
+    icon?: string;
+}
+
+export interface CollectionRepo {
+    id: string;
+    name: string;
+    description: string;
+    language: string;
+    stars: number;
+    tags: string[];
+    category: string;
+    url: string;
+    notes: string;
+}
+
+export interface CollectionReposResponse {
+    repositories: CollectionRepo[];
+    total: number;
+    page: number;
+    limit: number;
+    has_more: boolean;
+}
+
+export async function listCollections(includeRepos = false): Promise<Collection[]> {
+    const url = `${API_BASE}/collections?include_repos=${includeRepos}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Fetch collections failed: ${resp.statusText}`);
+    const data = await resp.json();
+    return data.collections;
+}
+
+export async function getCollection(collectionId: string): Promise<Collection> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}`);
+    if (!resp.ok) throw new Error(`Fetch collection failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function createCollection(data: CollectionCreate): Promise<Collection> {
+    const resp = await fetch(`${API_BASE}/collections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(`Create collection failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function updateCollection(collectionId: string, data: CollectionUpdate): Promise<Collection> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!resp.ok) throw new Error(`Update collection failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteCollection(collectionId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Delete collection failed: ${resp.statusText}`);
+}
+
+export async function addRepoToCollection(
+    collectionId: string,
+    repoId: number,
+    notes = ""
+): Promise<void> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_id: repoId, notes }),
+    });
+    if (!resp.ok) throw new Error(`Add repo to collection failed: ${resp.statusText}`);
+}
+
+export async function removeRepoFromCollection(
+    collectionId: string,
+    repoId: number
+): Promise<void> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Remove repo from collection failed: ${resp.statusText}`);
+}
+
+export async function getCollectionRepos(
+    collectionId: string,
+    page = 1,
+    limit = 20
+): Promise<CollectionReposResponse> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos?page=${page}&limit=${limit}`);
+    if (!resp.ok) throw new Error(`Fetch collection repos failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function getRepoCollections(repoId: number): Promise<Collection[]> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/collections`);
+    if (!resp.ok) throw new Error(`Fetch repo collections failed: ${resp.statusText}`);
+    const data = await resp.json();
+    return data.collections;
+}
+
+export async function getAllCollectionTags(): Promise<string[]> {
+    const resp = await fetch(`${API_BASE}/collections/tags`);
+    if (!resp.ok) throw new Error(`Fetch tags failed: ${resp.statusText}`);
+    const data = await resp.json();
+    return data.tags;
+}

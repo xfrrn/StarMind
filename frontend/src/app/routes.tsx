@@ -8,6 +8,8 @@ const RepositoriesPage = lazy(() => import("./pages/RepositoriesPage").then(m =>
 const RepositoryDetailPage = lazy(() => import("./pages/RepositoryDetailPage").then(m => ({ default: m.RepositoryDetailPage })));
 const SyncCenterPage = lazy(() => import("./pages/SyncCenterPage").then(m => ({ default: m.SyncCenterPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const CollectionsPage = lazy(() => import("./pages/CollectionsPage").then(m => ({ default: m.CollectionsPage })));
+const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage").then(m => ({ default: m.CollectionDetailPage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -37,6 +39,8 @@ export const router = createBrowserRouter([
       { path: "repositories/:id", element: <LazyPage Component={RepositoryDetailPage} /> },
       { path: "sync", element: <LazyPage Component={SyncCenterPage} /> },
       { path: "settings", element: <LazyPage Component={SettingsPage} /> },
+      { path: "collections", element: <LazyPage Component={CollectionsPage} /> },
+      { path: "collections/:id", element: <LazyPage Component={CollectionDetailPage} /> },
     ],
   },
 ]);

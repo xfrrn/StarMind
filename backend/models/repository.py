@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.orm import relationship
 
 from config import get_settings
 from models.database import Base
@@ -60,6 +61,13 @@ class Repository(Base):
     readme_hash = Column(String(64), default="")
     embedding_version = Column(String(20), default="")
     embedding_updated_at = Column(DateTime, default=None)
+
+    # Relationship to collections
+    collections = relationship(
+        "Collection",
+        secondary="collection_repos",
+        back_populates="repositories",
+    )
 
     __table_args__ = (
         Index("ix_repositories_language", "language"),

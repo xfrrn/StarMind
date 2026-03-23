@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router';
-import { ArrowLeft, Star, GitFork, Eye, Globe, Github, Terminal, Activity, FileText, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
-import { fetchRepository } from '../api';
+import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, type Collection } from '../api';
 import { RepoChat } from '../components/RepoChat';
 import type { Repository } from '../data';
 
@@ -16,7 +16,6 @@ function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): strin
   const normalizedRepoUrl = repoUrl.replace(/\/+$/, '');
   const cleanedPath = url.replace(/^\.?\//, '');
 
-  // Absolute path from repo root
   if (url.startsWith('/')) {
     return isImage
       ? `${normalizedRepoUrl}/raw/HEAD${url}`
@@ -35,6 +34,11 @@ export function RepositoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Collections state
+  const [allCollections, setAllCollections] = useState<Collection[]>([]);
+  const [repoCollections, setRepoCollections] = useState<Collection[]>([]);
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+
   const autoFocusChat = searchParams.get('chat') === 'true';
 
   useEffect(() => {
@@ -45,6 +49,42 @@ export function RepositoryDetailPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      listCollections(false),
+      getRepoCollections(parseInt(id))
+    ])
+      .then(([all, repoCols]) => {
+        setAllCollections(all);
+        setRepoCollections(repoCols);
+      })
+      .catch(console.error);
+  }, [id]);
+
+  const handleAddToCollection = async (collectionId: string) => {
+    if (!id) return;
+    try {
+      await addRepoToCollection(collectionId, parseInt(id));
+      const collection = allCollections.find(c => c.id === collectionId);
+      if (collection) {
+        setRepoCollections(prev => [...prev, collection]);
+      }
+    } catch (err) {
+      console.error('Failed to add to collection:', err);
+    }
+  };
+
+  const handleRemoveFromCollection = async (collectionId: string) => {
+    if (!id) return;
+    try {
+      await removeRepoFromCollection(collectionId, parseInt(id));
+      setRepoCollections(prev => prev.filter(c => c.id !== collectionId));
+    } catch (err) {
+      console.error('Failed to remove from collection:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -116,6 +156,13 @@ export function RepositoryDetailPage() {
             <Github className="w-4 h-4" />
             View on GitHub
           </a>
+          <button
+            onClick={() => setShowCollectionModal(true)}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors border border-zinc-200 dark:border-zinc-700"
+          >
+            <FolderPlus className="w-4 h-4" />
+            Add to Collection
+          </button>
         </div>
       </header>
 
@@ -170,6 +217,32 @@ export function RepositoryDetailPage() {
 
         {/* Sidebar Info */}
         <div className="space-y-8">
+          {/* Collections Section */}
+          {repoCollections.length > 0 && (
+            <section>
+              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
+                Collections
+              </h3>
+              <div className="space-y-2">
+                {repoCollections.map(collection => (
+                  <Link
+                    key={collection.id}
+                    to={`/collections/${collection.id}`}
+                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center"
+                      style={{ backgroundColor: `${collection.color}20`, color: collection.color }}
+                    >
+                      <Folder className="w-3 h-3" />
+                    </div>
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{collection.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section>
             <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
               Technology Stack
@@ -214,6 +287,124 @@ export function RepositoryDetailPage() {
               </div>
             </div>
           </section>
+        </div>
+      </div>
+
+      {/* Add to Collection Modal */}
+      {showCollectionModal && (
+        <AddToCollectionModal
+          repoName={repo.name}
+          allCollections={allCollections}
+          repoCollections={repoCollections}
+          onAdd={handleAddToCollection}
+          onRemove={handleRemoveFromCollection}
+          onClose={() => setShowCollectionModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddToCollectionModal({
+  repoName,
+  allCollections,
+  repoCollections,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  repoName: string;
+  allCollections: Collection[];
+  repoCollections: Collection[];
+  onAdd: (collectionId: string) => void;
+  onRemove: (collectionId: string) => void;
+  onClose: () => void;
+}) {
+  const isInCollection = (collectionId: string) => {
+    return repoCollections.some(c => c.id === collectionId);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              Add to Collection
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {repoName}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 max-h-80 overflow-y-auto">
+          {allCollections.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-zinc-500 dark:text-zinc-400 mb-4">
+                No collections yet
+              </p>
+              <Link
+                to="/collections"
+                className="text-blue-500 hover:text-blue-600 text-sm font-medium"
+              >
+                Create a collection →
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {allCollections.map((collection) => {
+                const added = isInCollection(collection.id);
+                return (
+                  <button
+                    key={collection.id}
+                    onClick={() => added ? onRemove(collection.id) : onAdd(collection.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
+                      added
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent'
+                    }`}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: `${collection.color}20`, color: collection.color }}
+                    >
+                      <Folder className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-zinc-900 dark:text-zinc-50 text-sm">
+                        {collection.name}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {collection.repo_count} repositories
+                      </p>
+                    </div>
+                    {added && (
+                      <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
+                        <Check className="w-4 h-4" />
+                        Added
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors"
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
