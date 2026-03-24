@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
+    # CORS allowed origins (comma-separated, e.g., "http://localhost:5173,http://localhost:3000")
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     model_config = {
         "env_file": ".env",
