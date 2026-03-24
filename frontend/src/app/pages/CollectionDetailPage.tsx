@@ -1,7 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
-import { ArrowLeft, Folder, ExternalLink, Trash2, Star, Activity } from 'lucide-react';
-import { getCollection, getCollectionRepos, deleteCollection, type Collection, type CollectionRepo } from '../api';
+import {
+  ArrowLeft,
+  ExternalLink,
+  Trash2,
+  Star,
+  Edit3,
+  X,
+  Plus,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  getCollection,
+  getCollectionRepos,
+  deleteCollection,
+  updateCollection,
+  removeRepoFromCollection,
+  type Collection,
+  type CollectionRepo,
+} from '../api';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+
+const PRESET_COLORS = [
+  '#3B82F6',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
+  '#06B6D4',
+  '#84CC16',
+];
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  folder: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>,
+  star: Star,
+  heart: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>,
+  bookmark: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>,
+  tag: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42z"/></svg>,
+  briefcase: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM10 4h4v2h-4V4z"/></svg>,
+  code: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>,
+  zap: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
+};
+
+function renderIcon(iconName: string, className?: string) {
+  const Icon = ICON_MAP[iconName];
+  if (!Icon) return <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>;
+  return <Icon className={className} />;
+}
+
+const modalBackdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 }
+};
+
+const modalContentVariants = {
+  hidden: { opacity: 0, scale: 0.95, y: 20 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
+  exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.15, ease: 'easeIn' } }
+};
 
 export function CollectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +69,15 @@ export function CollectionDetailPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editColor, setEditColor] = useState(PRESET_COLORS[0]);
+  const [editIcon, setEditIcon] = useState('folder');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -25,6 +91,12 @@ export function CollectionDetailPage() {
         setCollection(collectionData);
         setRepos(reposData.repositories);
         setHasMore(reposData.has_more);
+        // Initialize edit form
+        setEditName(collectionData.name);
+        setEditDescription(collectionData.description);
+        setEditTags(collectionData.tags);
+        setEditColor(collectionData.color || PRESET_COLORS[0]);
+        setEditIcon(collectionData.icon || 'folder');
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -46,11 +118,51 @@ export function CollectionDetailPage() {
     }
   };
 
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: loadMore,
+    hasMore,
+    loading: loadingMore,
+  });
+
   const handleDeleteCollection = async () => {
     if (!collection || !confirm(`Delete collection "${collection.name}"? This cannot be undone.`)) return;
     try {
       await deleteCollection(collection.id);
       window.history.back();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleEditCollection = async () => {
+    if (!collection || !editName.trim()) return;
+    setSaving(true);
+    try {
+      await updateCollection(collection.id, {
+        name: editName,
+        description: editDescription,
+        tags: editTags,
+        color: editColor,
+        icon: editIcon,
+      });
+      const updated = await getCollection(collection.id);
+      setCollection(updated);
+      setShowEditModal(false);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveRepo = async (repoId: string, repoName: string) => {
+    if (!collection || !confirm(`Remove "${repoName}" from this collection?`)) return;
+    try {
+      await removeRepoFromCollection(collection.id, parseInt(repoId));
+      setRepos(prev => prev.filter(r => r.id !== repoId));
+      // Update collection repo_count
+      const updated = await getCollection(collection.id);
+      setCollection(updated);
     } catch (err: any) {
       setError(err.message);
     }
@@ -76,7 +188,11 @@ export function CollectionDetailPage() {
   return (
     <div className="w-full max-w-[1520px] mx-auto py-8 px-6 xl:px-10">
       {/* Breadcrumb */}
-      <div className="mb-6 flex items-center gap-4">
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="mb-6 flex items-center gap-4"
+      >
         <Link
           to="/collections"
           className="inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 transition-colors"
@@ -88,17 +204,21 @@ export function CollectionDetailPage() {
           <span>/</span>
           <span className="text-zinc-900 dark:text-zinc-50">{collection.name}</span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Header */}
-      <div className="mb-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center"
               style={{ backgroundColor: `${collection.color}20`, color: collection.color }}
             >
-              <Folder className="w-7 h-7" />
+              {renderIcon(collection.icon || 'folder', 'w-7 h-7')}
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -109,13 +229,22 @@ export function CollectionDetailPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleDeleteCollection}
-            className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-xl font-medium transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl font-medium transition-colors"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit
+            </button>
+            <button
+              onClick={handleDeleteCollection}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-xl font-medium transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          </div>
         </div>
 
         {collection.description && (
@@ -136,12 +265,18 @@ export function CollectionDetailPage() {
             ))}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Repositories List */}
       {repos.length === 0 ? (
-        <div className="text-center py-20 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          <Folder className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-20 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800"
+        >
+          <div className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-700 mb-4 flex items-center justify-center">
+            {renderIcon(collection.icon || 'folder', 'w-12 h-12')}
+          </div>
           <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-50 mb-2">
             No repositories yet
           </h3>
@@ -152,70 +287,349 @@ export function CollectionDetailPage() {
             to="/repositories"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
           >
+            <Plus className="w-4 h-4" />
             Browse Repositories
           </Link>
-        </div>
+        </motion.div>
       ) : (
         <div className="space-y-4">
-          {repos.map(repo => (
-            <RepoRow key={repo.id} repo={repo} collectionId={collection.id} />
-          ))}
-
-          {hasMore && (
-            <div className="text-center pt-4">
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="px-6 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors disabled:opacity-50"
+          <AnimatePresence>
+            {repos.map((repo, index) => (
+              <motion.div
+                key={repo.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: Math.min(index * 0.05, 0.3) }}
               >
-                {loadingMore ? 'Loading...' : 'Load More'}
-              </button>
+                <RepoRow
+                  repo={repo}
+                  onRemove={() => handleRemoveRepo(repo.id, repo.name)}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-4" />
+
+          {loadingMore && (
+            <div className="text-center py-4">
+              <div className="w-6 h-6 border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-50 rounded-full animate-spin mx-auto" />
             </div>
+          )}
+
+          {!hasMore && repos.length > 0 && (
+            <p className="text-center text-sm text-zinc-400 py-4">
+              You've reached the end
+            </p>
           )}
         </div>
       )}
+
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {showEditModal && (
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => e.target === e.currentTarget && setShowEditModal(false)}
+          >
+            <motion.div
+              variants={modalContentVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
+            >
+              <EditCollectionModalContent
+                name={editName}
+                setName={setEditName}
+                description={editDescription}
+                setDescription={setEditDescription}
+                tags={editTags}
+                setTags={setEditTags}
+                color={editColor}
+                setColor={setEditColor}
+                icon={editIcon}
+                setIcon={setEditIcon}
+                saving={saving}
+                onSave={handleEditCollection}
+                onClose={() => setShowEditModal(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function RepoRow({ repo, collectionId }: { repo: CollectionRepo; collectionId: string }) {
+function RepoRow({ repo, onRemove }: { repo: CollectionRepo; onRemove: () => void }) {
+  const [showRemove, setShowRemove] = useState(false);
+
   return (
-    <Link
-      to={`/repositories/${repo.id}`}
-      className="block bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 hover:shadow-md transition-shadow"
+    <div
+      className="group relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
+      onMouseEnter={() => setShowRemove(true)}
+      onMouseLeave={() => setShowRemove(false)}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate">
-              {repo.name}
-            </h3>
-            {repo.language && (
-              <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
-                {repo.language}
-              </span>
+      <Link
+        to={`/repositories/${repo.id}`}
+        className="block"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1">
+              <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate">
+                {repo.name}
+              </h3>
+              {repo.language && (
+                <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                  {repo.language}
+                </span>
+              )}
+            </div>
+            {repo.description && (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                {repo.description}
+              </p>
+            )}
+            {repo.notes && (
+              <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-2 italic">
+                Note: {repo.notes}
+              </p>
             )}
           </div>
-          {repo.description && (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
-              {repo.description}
-            </p>
-          )}
-          {repo.notes && (
-            <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-2 italic">
-              Note: {repo.notes}
-            </p>
+          <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400 shrink-0">
+            <div className="flex items-center gap-1">
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+              <span>{(repo.stars / 1000).toFixed(1)}k</span>
+            </div>
+            <ExternalLink className="w-4 h-4" />
+          </div>
+        </div>
+      </Link>
+
+      {/* Remove button */}
+      <AnimatePresence>
+        {showRemove && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.15 }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="absolute top-3 right-3 p-1.5 rounded-lg bg-red-50 dark:bg-red-950 text-red-500 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function EditCollectionModalContent({
+  name,
+  setName,
+  description,
+  setDescription,
+  tags,
+  setTags,
+  color,
+  setColor,
+  icon,
+  setIcon,
+  saving,
+  onSave,
+  onClose,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  tags: string[];
+  setTags: (v: string[]) => void;
+  color: string;
+  setColor: (v: string) => void;
+  icon: string;
+  setIcon: (v: string) => void;
+  saving: boolean;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const [tagInput, setTagInput] = useState('');
+
+  const addTag = () => {
+    const tag = tagInput.trim();
+    if (tag && !tags.includes(tag)) {
+      setTags([...tags, tag]);
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setTags(tags.filter((t) => t !== tag));
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          Edit Collection
+        </h2>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Name *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., AI Tools"
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Description
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What's this collection about?"
+            rows={2}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Tags
+          </label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+              placeholder="Add a tag..."
+              className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={addTag}
+              className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors"
+            >
+              Add
+            </button>
+          </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs rounded-full"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400 shrink-0">
-          <div className="flex items-center gap-1">
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            <span>{(repo.stars / 1000).toFixed(1)}k</span>
+
+        {/* Icon */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Icon
+          </label>
+          <div className="flex gap-2">
+            {Object.entries(ICON_MAP).map(([iconName, IconComponent]) => (
+              <button
+                key={iconName}
+                type="button"
+                onClick={() => setIcon(iconName)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  icon === iconName
+                    ? 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-offset-zinc-900 scale-110'
+                    : 'hover:scale-105'
+                }`}
+                style={{
+                  backgroundColor: icon === iconName ? `${color}20` : 'transparent',
+                  color: color
+                }}
+              >
+                <IconComponent className="w-5 h-5" />
+              </button>
+            ))}
           </div>
-          <ExternalLink className="w-4 h-4" />
+        </div>
+
+        {/* Color */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Color
+          </label>
+          <div className="flex gap-2">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-lg transition-transform ${
+                  color === c
+                    ? 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-offset-zinc-900 scale-110'
+                    : 'hover:scale-105'
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
         </div>
       </div>
-    </Link>
+
+      <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={!name.trim() || saving}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </>
   );
 }
 

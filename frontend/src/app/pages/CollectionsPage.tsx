@@ -2,18 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import {
   Folder,
+  Star,
+  Heart,
+  Bookmark,
+  Tag as TagIcon,
+  Briefcase,
+  Code,
+  Zap,
   Plus,
   MoreVertical,
   Trash2,
   Edit3,
-  Tag,
-  ExternalLink,
   Search,
   X,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   listCollections,
   createCollection,
+  updateCollection,
   deleteCollection,
   type Collection,
 } from '../api';
@@ -29,32 +36,77 @@ const PRESET_COLORS = [
   '#84CC16', // lime
 ];
 
-const PRESET_ICONS = [
-  'folder',
-  'star',
-  'heart',
-  'bookmark',
-  'tag',
-  'briefcase',
-  'code',
-  'zap',
-];
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  folder: Folder,
+  star: Star,
+  heart: Heart,
+  bookmark: Bookmark,
+  tag: TagIcon,
+  briefcase: Briefcase,
+  code: Code,
+  zap: Zap,
+};
+
+function renderIcon(iconName: string, className?: string) {
+  const Icon = ICON_MAP[iconName] || Folder;
+  return <Icon className={className} />;
+}
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08 }
+  }
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: 'easeOut' }
+  }
+};
+
+const modalBackdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 }
+};
+
+const modalContentVariants = {
+  hidden: { opacity: 0, scale: 0.95, y: 20 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { duration: 0.2, ease: 'easeOut' }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.95,
+    y: 20,
+    transition: { duration: 0.15, ease: 'easeIn' }
+  }
+};
 
 export function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  // Form state for new collection
-  const [newName, setNewName] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newTags, setNewTags] = useState<string[]>([]);
-  const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
-  const [newIcon, setNewIcon] = useState('folder');
-  const [creating, setCreating] = useState(false);
+  // Form state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formTags, setFormTags] = useState<string[]>([]);
+  const [formColor, setFormColor] = useState(PRESET_COLORS[0]);
+  const [formIcon, setFormIcon] = useState('folder');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadCollections();
@@ -72,33 +124,58 @@ export function CollectionsPage() {
     }
   };
 
-  const handleCreateCollection = async () => {
-    if (!newName.trim()) return;
+  const openCreateModal = () => {
+    setEditingId(null);
+    setFormName('');
+    setFormDescription('');
+    setFormTags([]);
+    setFormColor(PRESET_COLORS[0]);
+    setFormIcon('folder');
+    setShowModal(true);
+  };
 
-    setCreating(true);
+  const openEditModal = (collection: Collection) => {
+    setEditingId(collection.id);
+    setFormName(collection.name);
+    setFormDescription(collection.description);
+    setFormTags(collection.tags);
+    setFormColor(collection.color || PRESET_COLORS[0]);
+    setFormIcon(collection.icon || 'folder');
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim()) return;
+
+    setSaving(true);
     try {
-      await createCollection({
-        name: newName,
-        description: newDescription,
-        tags: newTags,
-        color: newColor,
-        icon: newIcon,
-      });
-      setShowCreateModal(false);
-      setNewName('');
-      setNewDescription('');
-      setNewTags([]);
-      setNewColor(PRESET_COLORS[0]);
-      setNewIcon('folder');
+      if (editingId) {
+        await updateCollection(editingId, {
+          name: formName,
+          description: formDescription,
+          tags: formTags,
+          color: formColor,
+          icon: formIcon,
+        });
+      } else {
+        await createCollection({
+          name: formName,
+          description: formDescription,
+          tags: formTags,
+          color: formColor,
+          icon: formIcon,
+        });
+      }
+      setShowModal(false);
       await loadCollections();
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
-  const handleDeleteCollection = async (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete collection "${name}"? This cannot be undone.`)) return;
 
     try {
@@ -144,7 +221,7 @@ export function CollectionsPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={openCreateModal}
           className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -216,7 +293,7 @@ export function CollectionsPage() {
           </p>
           {collections.length === 0 && (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={openCreateModal}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -225,110 +302,107 @@ export function CollectionsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
           {filteredCollections.map((collection) => (
             <CollectionCard
               key={collection.id}
               collection={collection}
-              onDelete={() => handleDeleteCollection(collection.id, collection.name)}
+              onEdit={() => openEditModal(collection)}
+              onDelete={() => handleDelete(collection.id, collection.name)}
             />
           ))}
-        </div>
+        </motion.div>
       )}
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <CreateCollectionModal
-          name={newName}
-          setName={setNewName}
-          description={newDescription}
-          setDescription={setNewDescription}
-          tags={newTags}
-          setTags={setNewTags}
-          color={newColor}
-          setColor={setNewColor}
-          icon={newIcon}
-          setIcon={setNewIcon}
-          creating={creating}
-          onCreate={handleCreateCollection}
-          onClose={() => setShowCreateModal(false)}
-        />
-      )}
+      {/* Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
+          >
+            <motion.div
+              variants={modalContentVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
+            >
+              <CollectionModalContent
+                isEdit={!!editingId}
+                name={formName}
+                setName={setFormName}
+                description={formDescription}
+                setDescription={setFormDescription}
+                tags={formTags}
+                setTags={setFormTags}
+                color={formColor}
+                setColor={setFormColor}
+                icon={formIcon}
+                setIcon={setFormIcon}
+                saving={saving}
+                onSave={handleSave}
+                onClose={() => setShowModal(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function CollectionCard({
   collection,
+  onEdit,
   onDelete,
 }: {
   collection: Collection;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div
-      className="group relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:shadow-lg transition-shadow"
+    <motion.div
+      variants={cardVariants}
+      className="group relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:shadow-lg hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
     >
       {/* Color accent */}
       <div
         className="h-1.5"
-        style={{ backgroundColor: collection.color }}
+        style={{ backgroundColor: collection.color || PRESET_COLORS[0] }}
       />
 
-      <div className="p-5">
+      {/* Clickable content */}
+      <Link to={`/collections/${collection.id}`} className="block p-5">
         {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `${collection.color}20`, color: collection.color }}
-            >
-              <Folder className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-                {collection.name}
-              </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {collection.repo_count} repositories
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{
+              backgroundColor: `${collection.color || PRESET_COLORS[0]}20`,
+              color: collection.color || PRESET_COLORS[0]
+            }}
+          >
+            {renderIcon(collection.icon || 'folder', 'w-5 h-5')}
           </div>
-
-          {/* Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-20 py-1">
-                  <Link
-                    to={`/collections/${collection.id}`}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    View
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setShowMenu(false);
-                      onDelete();
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate">
+              {collection.name}
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {collection.repo_count} repositories
+            </p>
           </div>
         </div>
 
@@ -364,23 +438,77 @@ function CollectionCard({
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">Recently added:</p>
             <div className="space-y-1">
               {(collection as any).repositories.slice(0, 3).map((repo: any) => (
-                <Link
+                <span
                   key={repo.id}
-                  to={`/repositories/${repo.id}`}
-                  className="block text-sm text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 truncate"
+                  className="block text-sm text-zinc-700 dark:text-zinc-300 truncate"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {repo.name}
-                </Link>
+                </span>
               ))}
             </div>
           </div>
         )}
+      </Link>
+
+      {/* Menu - outside the link */}
+      <div className="absolute top-5 right-5">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowMenu(!showMenu);
+          }}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        <AnimatePresence>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-20 py-1 overflow-hidden"
+              >
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onEdit();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onDelete();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-function CreateCollectionModal({
+function CollectionModalContent({
+  isEdit,
   name,
   setName,
   description,
@@ -391,10 +519,11 @@ function CreateCollectionModal({
   setColor,
   icon,
   setIcon,
-  creating,
-  onCreate,
+  saving,
+  onSave,
   onClose,
 }: {
+  isEdit: boolean;
   name: string;
   setName: (v: string) => void;
   description: string;
@@ -405,8 +534,8 @@ function CreateCollectionModal({
   setColor: (v: string) => void;
   icon: string;
   setIcon: (v: string) => void;
-  creating: boolean;
-  onCreate: () => void;
+  saving: boolean;
+  onSave: () => void;
   onClose: () => void;
 }) {
   const [tagInput, setTagInput] = useState('');
@@ -424,130 +553,158 @@ function CreateCollectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Create Collection
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          {isEdit ? 'Edit Collection' : 'Create Collection'}
+        </h2>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Name *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., AI Tools"
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Name *
-            </label>
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Description
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What's this collection about?"
+            rows={2}
+            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Tags
+          </label>
+          <div className="flex gap-2 mb-2">
             <input
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., AI Tools"
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+              placeholder="Add a tag..."
+              className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <button
+              onClick={addTag}
+              className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors"
+            >
+              Add
+            </button>
           </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What's this collection about?"
-              rows={2}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Tags
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                placeholder="Add a tag..."
-                className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={addTag}
-                className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors"
-              >
-                Add
-              </button>
-            </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs rounded-full"
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs rounded-full"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="hover:text-red-500 transition-colors"
                   >
-                    {tag}
-                    <button
-                      onClick={() => removeTag(tag)}
-                      className="hover:text-red-500"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Color */}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Color
-            </label>
-            <div className="flex gap-2">
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-lg transition-transform ${
-                    color === c ? 'ring-2 ring-offset-2 ring-zinc-400 scale-110' : ''
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Icon */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Icon
+          </label>
+          <div className="flex gap-2">
+            {Object.entries(ICON_MAP).map(([iconName, IconComponent]) => (
+              <button
+                key={iconName}
+                type="button"
+                onClick={() => setIcon(iconName)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  icon === iconName
+                    ? 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-offset-zinc-900 scale-110'
+                    : 'hover:scale-105'
+                }`}
+                style={{
+                  backgroundColor: icon === iconName ? `${color}20` : 'transparent',
+                  color: color
+                }}
+              >
+                <IconComponent className="w-5 h-5" />
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onCreate}
-            disabled={!name.trim() || creating}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
-          >
-            {creating ? 'Creating...' : 'Create'}
-          </button>
+        {/* Color */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Color
+          </label>
+          <div className="flex gap-2">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-lg transition-transform ${
+                  color === c
+                    ? 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-offset-zinc-900 scale-110'
+                    : 'hover:scale-105'
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Footer */}
+      <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={!name.trim() || saving}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving...' : isEdit ? 'Save' : 'Create'}
+        </button>
+      </div>
+    </>
   );
 }
 
