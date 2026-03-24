@@ -42,7 +42,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./packages/frontend
       dockerfile: Dockerfile
     container_name: starmind_frontend
     restart: always

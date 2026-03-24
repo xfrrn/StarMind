@@ -1,0 +1,34 @@
+{
+  "name": "@starmind/root",
+  "private": true,
+  "version": "0.1.0",
+  "description": "StarMind - AI-powered GitHub starred repositories analyzer",
+  "scripts": {
+    "dev:frontend": "pnpm --filter @starmind/frontend dev",
+    "build:frontend": "pnpm --filter @starmind/frontend build",
+    "preview:frontend": "pnpm --filter @starmind/frontend preview",
+    "dev:backend": "cd backend && uv run uvicorn main:app --reload --port 8000",
+    "test:backend": "cd backend && uv run pytest",
+    "sync:backend": "cd backend && uv sync",
+    "lock:backend": "cd backend && uv lock",
+    "dev": "pnpm dev:frontend",
+    "dev:all": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+    "docker:up": "docker-compose up",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "install:all": "pnpm install && cd backend && uv sync",
+    "clean": "pnpm --filter @starmind/frontend clean"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "6.3.5"
+    }
+  }
+}

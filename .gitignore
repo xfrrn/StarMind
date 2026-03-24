@@ -39,12 +39,14 @@ backend/dist/
 # =========================
 # Node / Frontend
 # =========================
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-frontend/*.local
-frontend/.eslintcache
-frontend/coverage/
+node_modules/
+packages/frontend/node_modules/
+packages/frontend/dist/
+packages/frontend/dist-ssr/
+packages/frontend/*.local
+packages/frontend/.eslintcache
+packages/frontend/coverage/
+pnpm-lock.yaml
 
 # =========================
 # Environment Variables
