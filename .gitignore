@@ -59,6 +59,9 @@ backend/.env.*
 !backend/.env.example
 packages/frontend/.env
 !packages/frontend/.env.example
+packages/frontend/dist/
+packages/frontend/guidelines/
+packages/frontend/node_modules/
 
 # =========================
 # Docker
