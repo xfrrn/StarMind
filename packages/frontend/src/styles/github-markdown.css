@@ -26,3 +26,77 @@
   max-width: 100%;
   overflow: auto;
 }
+
+/* Dark mode improvements */
+.dark .github-readme-body {
+  color: #e5e7eb;
+}
+
+.dark .github-readme-body a {
+  color: #60a5fa;
+}
+
+.dark .github-readme-body a:hover {
+  color: #93c5fd;
+}
+
+/* Code blocks - dark mode */
+.dark .github-readme-body pre {
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+}
+
+.dark .github-readme-body code {
+  background-color: #374151;
+  color: #e5e7eb;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+.dark .github-readme-body pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Blockquotes */
+.dark .github-readme-body blockquote {
+  color: #9ca3af;
+  border-left-color: #4b5563;
+}
+
+/* Tables */
+.dark .github-readme-body table th,
+.dark .github-readme-body table td {
+  border-color: #374151;
+}
+
+.dark .github-readme-body table tr {
+  background-color: transparent;
+}
+
+.dark .github-readme-body table tr:nth-child(2n) {
+  background-color: #1f2937;
+}
+
+/* Headings */
+.dark .github-readme-body h1,
+.dark .github-readme-body h2,
+.dark .github-readme-body h3,
+.dark .github-readme-body h4,
+.dark .github-readme-body h5,
+.dark .github-readme-body h6 {
+  color: #f3f4f6;
+  border-bottom-color: #374151;
+}
+
+/* HR */
+.dark .github-readme-body hr {
+  background-color: #374151;
+  border-color: #374151;
+}
+
+/* Lists */
+.dark .github-readme-body li {
+  color: #e5e7eb;
+}
