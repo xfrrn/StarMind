@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
-from routers import chat, conversations, repositories, sync, settings, collections
+from routers import chat, conversations, repositories, sync, settings, collections, dashboard, public, backup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +53,9 @@ app.include_router(repositories.router)
 app.include_router(sync.router)
 app.include_router(settings.router)
 app.include_router(collections.router)
+app.include_router(dashboard.router)
+app.include_router(public.router)
+app.include_router(backup.router)
 
 
 @app.get("/api/health")

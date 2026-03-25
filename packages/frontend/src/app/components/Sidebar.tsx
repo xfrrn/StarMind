@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router';
-import { Sparkles, Library, RefreshCw, Settings, Github, ChevronUp, ExternalLink, Moon, Sun, CheckCircle, XCircle, FolderOpen } from 'lucide-react';
+import { Sparkles, Library, RefreshCw, Settings, Github, ChevronUp, ExternalLink, Moon, Sun, CheckCircle, XCircle, FolderOpen, BarChart3 } from 'lucide-react';
 import { cn } from '../utils';
 import { useTheme, type Theme } from '../hooks/useTheme';
 import { fetchSettings, type SettingsData } from '../api';
@@ -27,6 +27,7 @@ export function Sidebar() {
 
   const navItems = [
     { to: "/", icon: Sparkles, label: "AI Search", end: true },
+    { to: "/dashboard", icon: BarChart3, label: "Dashboard", end: true },
     { to: "/repositories", icon: Library, label: "Repositories", end: false },
     { to: "/collections", icon: FolderOpen, label: "Collections", end: true },
     { to: "/sync", icon: RefreshCw, label: "Sync Center", end: true },

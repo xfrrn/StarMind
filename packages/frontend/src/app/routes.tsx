@@ -10,6 +10,8 @@ const SyncCenterPage = lazy(() => import("./pages/SyncCenterPage").then(m => ({ 
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
 const CollectionsPage = lazy(() => import("./pages/CollectionsPage").then(m => ({ default: m.CollectionsPage })));
 const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage").then(m => ({ default: m.CollectionDetailPage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
+const PublicSharedPage = lazy(() => import("./pages/PublicSharedPage").then(m => ({ default: m.PublicSharedPage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -31,10 +33,15 @@ function LazyPage({ Component }: { Component: React.LazyExoticComponent<React.Co
 
 export const router = createBrowserRouter([
   {
+    path: "/shared/:shareId",
+    element: <LazyPage Component={PublicSharedPage} />,
+  },
+  {
     path: "/",
     Component: Layout,
     children: [
       { index: true, element: <LazyPage Component={SearchPage} /> },
+      { path: "dashboard", element: <LazyPage Component={DashboardPage} /> },
       { path: "repositories", element: <LazyPage Component={RepositoriesPage} /> },
       { path: "repositories/:id", element: <LazyPage Component={RepositoryDetailPage} /> },
       { path: "sync", element: <LazyPage Component={SyncCenterPage} /> },
