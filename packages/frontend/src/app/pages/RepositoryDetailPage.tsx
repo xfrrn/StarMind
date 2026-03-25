@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router';
-import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder } from 'lucide-react';
+import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder, StickyNote, Save, Pencil } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
-import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, type Collection } from '../api';
+import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, getRepoNote, updateRepoNote, deleteRepoNote, type Collection } from '../api';
 import { RepoChat } from '../components/RepoChat';
 import type { Repository } from '../data';
 
@@ -39,6 +39,11 @@ export function RepositoryDetailPage() {
   const [repoCollections, setRepoCollections] = useState<Collection[]>([]);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
 
+  // Note state
+  const [note, setNote] = useState('');
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
   const autoFocusChat = searchParams.get('chat') === 'true';
 
   useEffect(() => {
@@ -62,6 +67,38 @@ export function RepositoryDetailPage() {
       })
       .catch(console.error);
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    getRepoNote(id)
+      .then((data) => setNote(data.note))
+      .catch(console.error);
+  }, [id]);
+
+  const handleSaveNote = async () => {
+    if (!id) return;
+    setIsSavingNote(true);
+    try {
+      await updateRepoNote(id, note);
+      setIsEditingNote(false);
+    } catch (err) {
+      console.error('Failed to save note:', err);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!id) return;
+    if (!confirm('Delete this note?')) return;
+    try {
+      await deleteRepoNote(id);
+      setNote('');
+      setIsEditingNote(false);
+    } catch (err) {
+      console.error('Failed to delete note:', err);
+    }
+  };
 
   const handleAddToCollection = async (collectionId: string) => {
     if (!id) return;
@@ -217,6 +254,62 @@ export function RepositoryDetailPage() {
 
         {/* Sidebar Info */}
         <div className="space-y-8">
+          {/* Personal Note Section */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">
+                Personal Note
+              </h3>
+              {!isEditingNote && (
+                <button
+                  onClick={() => setIsEditingNote(true)}
+                  className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {isEditingNote ? (
+              <div className="space-y-3">
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Add your personal notes about this repository..."
+                  rows={4}
+                  className="w-full px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={isSavingNote}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Save className="w-3 h-3" />
+                    {isSavingNote ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setIsEditingNote(false); getRepoNote(id!).then(d => setNote(d.note)); }}
+                    className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                  {note && (
+                    <button
+                      onClick={handleDeleteNote}
+                      className="px-3 py-1.5 text-xs text-red-500 hover:text-red-600"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className={`text-sm ${note ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-400 dark:text-zinc-500 italic'}`}>
+                {note || 'No personal note yet. Click edit to add one.'}
+              </div>
+            )}
+          </section>
+
           {/* Collections Section */}
           {repoCollections.length > 0 && (
             <section>
