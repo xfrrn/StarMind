@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_max_text_length: int = 8000
-    embedding_dimension: int = 4096
+    embedding_dimension: int = 1536
     embedding_version: str = "v2"
     embedding_metadata_weight: float = 0.65
     embedding_readme_weight: float = 0.35
