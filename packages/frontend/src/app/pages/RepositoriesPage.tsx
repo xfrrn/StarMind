@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
-import { Search, ChevronDown, Settings2 } from 'lucide-react';
+import { Search, ChevronDown, Settings2, ArrowUpDown, Star } from 'lucide-react';
 import { RepoCard } from '../components/RepoCard';
 import { Badge } from '../components/Badge';
 import { fetchRepositories, fetchStats, type RepoFilters, type StatsResponse } from '../api';
@@ -20,6 +20,9 @@ export function RepositoriesPage() {
   const [selectedActivity, setSelectedActivity] = useState<string>('');
   const [filterHasUI, setFilterHasUI] = useState<boolean | undefined>(undefined);
   const [filterHasAPI, setFilterHasAPI] = useState<boolean | undefined>(undefined);
+  const [starsMin, setStarsMin] = useState<number | undefined>(undefined);
+  const [starsMax, setStarsMax] = useState<number | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<string>('stars');
 
   const loadRepos = async () => {
     setLoading(true);
@@ -33,6 +36,9 @@ export function RepositoriesPage() {
         activity_level: selectedActivity || undefined,
         has_ui: filterHasUI,
         has_api: filterHasAPI,
+        stars_min: starsMin,
+        stars_max: starsMax,
+        sort_by: sortBy as RepoFilters['sort_by'],
       };
       const data = await fetchRepositories(filters);
       setRepos(data.repositories);
@@ -61,6 +67,9 @@ export function RepositoriesPage() {
     selectedActivity,
     filterHasUI,
     filterHasAPI,
+    starsMin,
+    starsMax,
+    sortBy,
   ]);
 
   useEffect(() => {
@@ -161,6 +170,57 @@ export function RepositoriesPage() {
                   onChange={() => { setSelectedActivity(selectedActivity === level ? '' : level); setPage(1); }}
                 />
               ))}
+            </FilterSection>
+
+            <FilterSection title="Stars Range">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={starsMin ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : undefined;
+                      setStarsMin(val);
+                      setPage(1);
+                    }}
+                    className="w-20 px-2 py-1 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-zinc-400">-</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={starsMax ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : undefined;
+                      setStarsMax(val);
+                      setPage(1);
+                    }}
+                    className="w-20 px-2 py-1 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                {(starsMin !== undefined || starsMax !== undefined) && (
+                  <button
+                    onClick={() => { setStarsMin(undefined); setStarsMax(undefined); setPage(1); }}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </FilterSection>
+
+            <FilterSection title="Sort By">
+              <select
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+                className="w-full px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="stars">Stars (High to Low)</option>
+                <option value="stars_asc">Stars (Low to High)</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="updated">Recently Updated</option>
+              </select>
             </FilterSection>
           </div>
         </div>

@@ -25,6 +25,9 @@ class RepositoryService:
         has_ui: bool | None,
         has_api: bool | None,
         activity_level: str | None,
+        stars_min: int | None = None,
+        stars_max: int | None = None,
+        sort_by: str | None = None,
     ) -> dict:
         query = select(Repository)
 
@@ -47,12 +50,36 @@ class RepositoryService:
             query = query.where(Repository.has_api == has_api)
         if activity_level:
             query = query.where(Repository.activity_level == activity_level)
+        if stars_min is not None:
+            query = query.where(Repository.stars >= stars_min)
+        if stars_max is not None:
+            query = query.where(Repository.stars <= stars_max)
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = query.order_by(Repository.stars.desc())
+        # Apply sorting
+        sort_field = Repository.stars
+        sort_desc = True
+        if sort_by == "name":
+            sort_field = Repository.name
+            sort_desc = False
+        elif sort_by == "updated":
+            sort_field = Repository.updated_at
+            sort_desc = True
+        elif sort_by == "stars_asc":
+            sort_field = Repository.stars
+            sort_desc = False
+        elif sort_by == "stars":
+            sort_field = Repository.stars
+            sort_desc = True
+
+        if sort_desc:
+            query = query.order_by(sort_field.desc())
+        else:
+            query = query.order_by(sort_field.asc())
+
         query = query.offset((page - 1) * limit).limit(limit)
         result = await db.execute(query)
         repos = result.scalars().all()

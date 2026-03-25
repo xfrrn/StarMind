@@ -264,6 +264,9 @@ export interface RepoFilters {
     has_ui?: boolean;
     has_api?: boolean;
     activity_level?: string;
+    stars_min?: number;
+    stars_max?: number;
+    sort_by?: 'stars' | 'stars_asc' | 'name' | 'updated';
     page?: number;
     limit?: number;
 }
@@ -588,4 +591,153 @@ export async function getAllCollectionTags(): Promise<string[]> {
     if (!resp.ok) throw new Error(`Fetch tags failed: ${resp.statusText}`);
     const data = await resp.json();
     return data.tags;
+}
+
+
+// ---- Repo Notes ----
+
+export interface NoteResponse {
+    note: string;
+}
+
+export async function getRepoNote(repoId: string): Promise<NoteResponse> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`);
+    if (!resp.ok) throw new Error(`Fetch note failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function updateRepoNote(repoId: string, note: string): Promise<NoteResponse> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+    });
+    if (!resp.ok) throw new Error(`Update note failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteRepoNote(repoId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Delete note failed: ${resp.statusText}`);
+}
+
+
+// ---- Dashboard ----
+
+export interface DistributionItem {
+    name: string;
+    count: number;
+}
+
+export interface DashboardResponse {
+    total_repos: number;
+    total_collections: number;
+    languages: DistributionItem[];
+    categories: DistributionItem[];
+    activity_levels: DistributionItem[];
+    stars_distribution: DistributionItem[];
+}
+
+export async function fetchDashboard(): Promise<DashboardResponse> {
+    return fetchJsonGet<DashboardResponse>(`${API_BASE}/dashboard`, CACHE_TTL.stats);
+}
+
+
+// ---- Share ----
+
+export interface ShareStatusResponse {
+    is_shared: boolean;
+    share_id: string | null;
+    share_url: string | null;
+    view_count: number;
+}
+
+export interface ShareResponse {
+    share_id: string;
+    share_url: string;
+}
+
+export async function getShareStatus(collectionId: string): Promise<ShareStatusResponse> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`);
+    if (!resp.ok) throw new Error(`Fetch share status failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function createShare(collectionId: string): Promise<ShareResponse> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`, {
+        method: 'POST',
+    });
+    if (!resp.ok) throw new Error(`Create share failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteShare(collectionId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Delete share failed: ${resp.statusText}`);
+}
+
+
+// ---- Public Shared ----
+
+export interface PublicCollectionRepo {
+    id: number;
+    name: string;
+    description: string;
+    language: string;
+    stars: number;
+    url: string;
+    notes: string;
+}
+
+export interface PublicCollectionResponse {
+    name: string;
+    description: string;
+    tags: string[];
+    color: string;
+    icon: string;
+    repo_count: number;
+    repositories: PublicCollectionRepo[];
+}
+
+export async function getPublicSharedCollection(shareId: string): Promise<PublicCollectionResponse> {
+    const resp = await fetch(`${API_BASE}/public/shared/${shareId}`);
+    if (!resp.ok) throw new Error(`Fetch shared collection failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+
+// ---- Backup ----
+
+export interface ImportStats {
+    collections: number;
+    notes: number;
+    repos_added: number;
+}
+
+export interface ImportResponse {
+    message: string;
+    stats: ImportStats;
+}
+
+export function getBackupExportUrl(): string {
+    return `${API_BASE}/backup/export`;
+}
+
+export async function importBackup(file: File): Promise<ImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch(`${API_BASE}/backup/import`, {
+        method: 'POST',
+        body: formData,
+    });
+    if (!resp.ok) {
+        const error = await resp.json().catch(() => ({ detail: 'Import failed' }));
+        throw new Error(error.detail || 'Import failed');
+    }
+    return resp.json();
 }

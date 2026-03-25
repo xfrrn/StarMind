@@ -3,13 +3,29 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
+from models.repo_note import RepoNote
 from routers.schemas import RepoListResponse, RepoOut, StatsResponse
 from services.service_registry import get_repository_service
 
 router = APIRouter(prefix="/api", tags=["repositories"])
+
+
+class NoteUpdate(BaseModel):
+    note: str
+
+
+class NoteResponse(BaseModel):
+    repo_id: int
+    note: str
+
+
+class NoteOut(BaseModel):
+    note: str
 
 
 @router.get("/repositories", response_model=RepoListResponse)
@@ -22,6 +38,13 @@ async def list_repositories(
     has_ui: Optional[bool] = Query(None),
     has_api: Optional[bool] = Query(None),
     activity_level: Optional[str] = Query(None),
+    stars_min: Optional[int] = Query(None, ge=0, description="Minimum stars count"),
+    stars_max: Optional[int] = Query(None, ge=0, description="Maximum stars count"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="Sort field: 'stars', 'stars_asc', 'name', 'updated'",
+        pattern="^(stars|stars_asc|name|updated)$",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """List repositories with filtering and pagination."""
@@ -36,6 +59,9 @@ async def list_repositories(
         has_ui=has_ui,
         has_api=has_api,
         activity_level=activity_level,
+        stars_min=stars_min,
+        stars_max=stars_max,
+        sort_by=sort_by,
     )
 
 
@@ -54,3 +80,42 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     """Get statistics about synced repositories."""
     service = get_repository_service()
     return await service.get_repository_stats(db)
+
+
+@router.get("/repositories/{repo_id}/note", response_model=NoteOut)
+async def get_repo_note(repo_id: int, db: AsyncSession = Depends(get_db)):
+    """Get personal note for a repository."""
+    result = await db.execute(select(RepoNote).where(RepoNote.repo_id == repo_id))
+    note = result.scalar_one_or_none()
+    if not note:
+        return NoteOut(note="")
+    return NoteOut(note=note.note)
+
+
+@router.put("/repositories/{repo_id}/note", response_model=NoteOut)
+async def update_repo_note(repo_id: int, data: NoteUpdate, db: AsyncSession = Depends(get_db)):
+    """Create or update personal note for a repository."""
+    result = await db.execute(select(RepoNote).where(RepoNote.repo_id == repo_id))
+    note = result.scalar_one_or_none()
+
+    if note:
+        note.note = data.note
+    else:
+        note = RepoNote(repo_id=repo_id, note=data.note)
+        db.add(note)
+
+    await db.commit()
+    return NoteOut(note=note.note)
+
+
+@router.delete("/repositories/{repo_id}/note")
+async def delete_repo_note(repo_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete personal note for a repository."""
+    result = await db.execute(select(RepoNote).where(RepoNote.repo_id == repo_id))
+    note = result.scalar_one_or_none()
+
+    if note:
+        await db.delete(note)
+        await db.commit()
+
+    return {"message": "Note deleted"}
