@@ -1,19 +1,27 @@
 import React, { useCallback, useEffect } from 'react';
-import { Search, Sparkles, MessageSquare, Loader2 } from 'lucide-react';
+import { Search, Sparkles, MessageSquare, Loader2, Clock, X, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { RepoCard } from '../components/RepoCard';
-import { useSearch } from '../hooks/useSearch';
+import { useSearch, useSearchHistory } from '../hooks';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SearchPage() {
   const { state, doSearch, setQuery, reset } = useSearch();
   const { query, isSearching, hasSearched, answer, results, error, statusMessage } = state;
+  const { history, addHistory, removeHistory, clearHistory } = useSearchHistory();
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     doSearch(query);
-  }, [query, doSearch]);
+    addHistory(query);
+  }, [query, doSearch, addHistory]);
+
+  const handleHistoryClick = useCallback((historyQuery: string) => {
+    setQuery(historyQuery);
+    doSearch(historyQuery);
+    addHistory(historyQuery);
+  }, [setQuery, doSearch, addHistory]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -132,6 +140,50 @@ export function SearchPage() {
 
       {!hasSearched && !isSearching && (
         <div className="mt-20">
+          {/* Search History */}
+          {history.length > 0 && (
+            <div className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                  Recent Searches
+                </h3>
+                <button
+                  onClick={clearHistory}
+                  className="text-xs text-zinc-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                {history.slice(0, 8).map((item) => (
+                  <div
+                    key={item.query}
+                    className="group flex items-center gap-1"
+                  >
+                    <button
+                      onClick={() => handleHistoryClick(item.query)}
+                      className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-sm text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                      {item.query}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeHistory(item.query);
+                      }}
+                      className="p-1 opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested Queries */}
           <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-6 text-center">
             Suggested Queries
           </h3>
@@ -147,6 +199,7 @@ export function SearchPage() {
                 onClick={() => {
                   setQuery(suggestion);
                   doSearch(suggestion);
+                  addHistory(suggestion);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-sm text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all"
               >
