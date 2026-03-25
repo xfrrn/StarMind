@@ -7,7 +7,7 @@
     "dev:frontend": "pnpm --filter @starmind/frontend dev",
     "build:frontend": "pnpm --filter @starmind/frontend build",
     "preview:frontend": "pnpm --filter @starmind/frontend preview",
-    "dev:backend": "cd backend && uv run uvicorn main:app --reload --port 8000",
+    "dev:backend": "cd backend && uv run uvicorn main:app --reload --port $(uv run python -c \"from config import get_settings; print(get_settings().port)\")",
     "test:backend": "cd backend && uv run pytest",
     "sync:backend": "cd backend && uv sync",
     "lock:backend": "cd backend && uv lock",

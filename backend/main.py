@@ -36,8 +36,8 @@ app = FastAPI(
 from config import get_settings
 
 # CORS — allow frontend dev server
-settings = get_settings()
-cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+app_settings = get_settings()
+cors_origins = [origin.strip() for origin in app_settings.cors_origins.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
