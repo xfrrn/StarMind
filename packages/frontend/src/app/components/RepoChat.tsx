@@ -22,19 +22,12 @@ export function RepoChat({ repoId, repo: initialRepo, autoFocus }: RepoChatProps
   const [loading, setLoading] = useState(false);
   const [currentRepo, setCurrentRepo] = useState<Repository | undefined>(initialRepo);
   const inputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
     }
   }, [autoFocus]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -151,8 +144,6 @@ export function RepoChat({ repoId, repo: initialRepo, autoFocus }: RepoChatProps
             </div>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
