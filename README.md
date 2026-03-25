@@ -153,13 +153,25 @@ StarMind/
 
 ### 环境变量
 
-| 变量 | 说明 | 必填 |
-|------|------|------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token | ✅ |
-| `OPENAI_API_KEY` | OpenAI API Key | ✅ |
-| `DATABASE_URL` | PostgreSQL 连接字符串 | ✅ |
-| `OPENAI_BASE_URL` | OpenAI API 地址（用于兼容 API） | ❌ |
-| `CORS_ORIGINS` | CORS 允许的源，逗号分隔 | ❌ |
+#### 必填变量
+
+| 变量 | 说明 |
+|------|------|
+| `GITHUB_TOKEN` | GitHub Personal Access Token（需要 `repo`, `read:user` 权限）|
+| `OPENAI_API_KEY` | OpenAI API Key |
+| `DATABASE_URL` | PostgreSQL 连接字符串（格式：`postgresql+asyncpg://user:pass@host:port/db`）|
+
+#### 可选变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API 地址 |
+| `OPENAI_MODEL` | `gpt-4o-mini` | 使用的 LLM 模型 |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 向量嵌入模型 |
+| `GITHUB_SYNC_PAGE_CONCURRENCY` | `4` | GitHub API 并发数 |
+| `AI_ANALYSIS_CONCURRENCY` | `1` | AI 分析并发数 |
+| `CHAT_SIMILARITY_THRESHOLD` | `0.5` | 向量搜索相似度阈值 |
+| `ENCRYPTION_KEY` | - | 敏感数据加密密钥（生产环境建议设置）|
 
 ### 应用内设置
 
@@ -173,13 +185,42 @@ StarMind/
 
 ## 🐳 Docker 部署
 
+### 1. 创建环境变量文件
+
 ```bash
-# 启动所有服务
-pnpm docker:up
+# 复制示例文件
+cp .env.docker.example .env
+
+# 编辑 .env，填入必填配置
+# GITHUB_TOKEN 和 OPENAI_API_KEY 是必须的
+```
+
+### 2. 启动服务
+
+```bash
+# 构建并启动所有服务
+docker-compose up -d --build
+
+# 查看日志
+docker-compose logs -f
 
 # 停止服务
-pnpm docker:down
+docker-compose down
 ```
+
+### 3. 访问应用
+
+- **前端**: http://localhost:5173
+- **后端 API**: http://localhost:8000
+- **API 文档**: http://localhost:8000/docs
+
+### 服务说明
+
+| 服务 | 镜像 | 端口 |
+|------|------|------|
+| `db` | pgvector/pgvector:pg16 | 5432 |
+| `backend` | 自建 (Python 3.11) | 8000 |
+| `frontend` | 自建 (nginx) | 5173 → 80 |
 
 ---
 

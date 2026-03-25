@@ -153,13 +153,25 @@ StarMind/
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token | ✅ |
-| `OPENAI_API_KEY` | OpenAI API Key | ✅ |
-| `DATABASE_URL` | PostgreSQL connection string | ✅ |
-| `OPENAI_BASE_URL` | OpenAI API base URL (for compatible APIs) | ❌ |
-| `CORS_ORIGINS` | Allowed CORS origins, comma-separated | ❌ |
+#### Required Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub Personal Access Token (requires `repo`, `read:user` permissions) |
+| `OPENAI_API_KEY` | OpenAI API Key |
+| `DATABASE_URL` | PostgreSQL connection string (format: `postgresql+asyncpg://user:pass@host:port/db`) |
+
+#### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API base URL |
+| `OPENAI_MODEL` | `gpt-4o-mini` | LLM model to use |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
+| `GITHUB_SYNC_PAGE_CONCURRENCY` | `4` | GitHub API concurrency |
+| `AI_ANALYSIS_CONCURRENCY` | `1` | AI analysis concurrency |
+| `CHAT_SIMILARITY_THRESHOLD` | `0.5` | Vector search similarity threshold |
+| `ENCRYPTION_KEY` | - | Encryption key for sensitive data (recommended for production) |
 
 ### In-App Settings
 
@@ -173,13 +185,42 @@ Configure in the **Settings** page:
 
 ## 🐳 Docker Deployment
 
+### 1. Create Environment File
+
 ```bash
-# Start all services
-pnpm docker:up
+# Copy example file
+cp .env.docker.example .env
+
+# Edit .env and fill in required values
+# GITHUB_TOKEN and OPENAI_API_KEY are required
+```
+
+### 2. Start Services
+
+```bash
+# Build and start all services
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
 
 # Stop services
-pnpm docker:down
+docker-compose down
 ```
+
+### 3. Access the Application
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+### Service Overview
+
+| Service | Image | Port |
+|---------|-------|------|
+| `db` | pgvector/pgvector:pg16 | 5432 |
+| `backend` | Custom (Python 3.11) | 8000 |
+| `frontend` | Custom (nginx) | 5173 → 80 |
 
 ---
 

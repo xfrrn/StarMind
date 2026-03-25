@@ -20,20 +20,37 @@ services:
       retries: 5
 
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: starmind_backend
     restart: always
     environment:
-      # Use the db service name from docker-compose
+      # Database
       - DATABASE_URL=postgresql+asyncpg://starmind:starmind_password@db:5432/starmind
-      # These will be read from your host .env file or environment variables
+      # GitHub (required)
       - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_SYNC_PAGE_CONCURRENCY=${GITHUB_SYNC_PAGE_CONCURRENCY:-4}
+      - GITHUB_README_CONCURRENCY=${GITHUB_README_CONCURRENCY:-8}
+      # OpenAI (required)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1536}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-v2}
+      # AI Analysis
+      - AI_ANALYSIS_CONCURRENCY=${AI_ANALYSIS_CONCURRENCY:-1}
+      - AI_ANALYSIS_REQUEST_DELAY_SECONDS=${AI_ANALYSIS_REQUEST_DELAY_SECONDS:-0.5}
+      # Chat
+      - CHAT_SIMILARITY_THRESHOLD=${CHAT_SIMILARITY_THRESHOLD:-0.5}
+      - CHAT_LLM_FILTER_ENABLED=${CHAT_LLM_FILTER_ENABLED:-true}
+      # Security
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      # Server
+      - HOST=0.0.0.0
+      - PORT=8000
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:
