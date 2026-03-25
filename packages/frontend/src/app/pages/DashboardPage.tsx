@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Repository, Collection, Activity, Star, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { Repository, FolderOpen, Activity, Star, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -76,7 +76,7 @@ export function DashboardPage() {
           color="blue"
         />
         <StatCard
-          icon={Collection}
+          icon={FolderOpen}
           label="Collections"
           value={data.total_collections.toLocaleString()}
           color="violet"
@@ -267,7 +267,7 @@ export function DashboardPage() {
           to="/collections"
           className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors border border-zinc-200 dark:border-zinc-700"
         >
-          <Collection className="w-4 h-4" />
+          <FolderOpen className="w-4 h-4" />
           View Collections
         </Link>
       </motion.div>
