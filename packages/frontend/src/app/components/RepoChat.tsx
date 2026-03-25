@@ -31,7 +31,9 @@ export function RepoChat({ repoId, repo: initialRepo, autoFocus }: RepoChatProps
   }, [autoFocus]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleSend = async () => {
