@@ -13,6 +13,7 @@ import {
   Download,
   Upload,
   Database,
+  Clock,
 } from 'lucide-react';
 import {
   fetchSettings,
@@ -35,6 +36,22 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'sync', label: 'Sync', icon: RefreshCw },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'backup', label: 'Backup', icon: Database },
+];
+
+// Common timezones
+const TIMEZONES = [
+  { value: 'Pacific/Auckland', label: 'Auckland (UTC+12/+13)' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (UTC+9)' },
+  { value: 'Asia/Shanghai', label: 'Shanghai (UTC+8)' },
+  { value: 'Asia/Singapore', label: 'Singapore (UTC+8)' },
+  { value: 'Asia/Kolkata', label: 'Kolkata (UTC+5:30)' },
+  { value: 'Europe/London', label: 'London (UTC+0/+1)' },
+  { value: 'Europe/Paris', label: 'Paris (UTC+1/+2)' },
+  { value: 'Europe/Berlin', label: 'Berlin (UTC+1/+2)' },
+  { value: 'America/New_York', label: 'New York (UTC-5/-4)' },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-8/-7)' },
+  { value: 'America/Chicago', label: 'Chicago (UTC-6/-5)' },
+  { value: 'UTC', label: 'UTC' },
 ];
 
 export function SettingsPage() {
@@ -61,6 +78,9 @@ export function SettingsPage() {
   const [aiAnalysisConcurrency, setAiAnalysisConcurrency] = useState(1);
   const [autoSummarize, setAutoSummarize] = useState(true);
   const [includeReadmes, setIncludeReadmes] = useState(true);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [autoSyncTime, setAutoSyncTime] = useState('00:00');
+  const [timezone, setTimezone] = useState('Asia/Shanghai');
 
   // UI state
   const [showGithubToken, setShowGithubToken] = useState(false);
@@ -92,6 +112,9 @@ export function SettingsPage() {
         setAiAnalysisConcurrency(data.ai_analysis_concurrency);
         setAutoSummarize(data.auto_summarize);
         setIncludeReadmes(data.include_readmes);
+        setAutoSyncEnabled(data.auto_sync_enabled);
+        setAutoSyncTime(data.auto_sync_time);
+        setTimezone(data.timezone);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -471,7 +494,64 @@ export function SettingsPage() {
               </p>
             </div>
             <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Auto Sync Section */}
+              <div className="pb-6 border-b border-zinc-200 dark:border-zinc-800">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Auto Sync
+                </h3>
+                <div className="space-y-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <div className="pt-0.5">
+                      <input
+                        type="checkbox"
+                        checked={autoSyncEnabled}
+                        onChange={(e) => setAutoSyncEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm text-zinc-900 dark:text-zinc-50">Enable Auto Sync</div>
+                      <div className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Automatically sync your starred repositories daily.</div>
+                    </div>
+                  </label>
+
+                  {autoSyncEnabled && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-7">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Sync Time</label>
+                        <input
+                          type="time"
+                          value={autoSyncTime}
+                          onChange={(e) => setAutoSyncTime(e.target.value)}
+                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Daily sync time in your selected timezone.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Timezone</label>
+                        <select
+                          value={timezone}
+                          onChange={(e) => setTimezone(e.target.value)}
+                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {TIMEZONES.map((tz) => (
+                            <option key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Timezone for scheduling the sync.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Concurrency Section */}
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mb-4">Concurrency</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Page Concurrency</label>
                   <input
@@ -508,6 +588,7 @@ export function SettingsPage() {
                   />
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Concurrent AI requests. Keep low to avoid rate limits.</p>
                 </div>
+              </div>
               </div>
 
               <div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
@@ -553,6 +634,9 @@ export function SettingsPage() {
                   ai_analysis_concurrency: aiAnalysisConcurrency,
                   auto_summarize: autoSummarize,
                   include_readmes: includeReadmes,
+                  auto_sync_enabled: autoSyncEnabled,
+                  auto_sync_time: autoSyncTime,
+                  timezone: timezone,
                 })}
                 disabled={saving}
                 className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl font-medium transition-colors text-sm shadow-sm disabled:opacity-50"

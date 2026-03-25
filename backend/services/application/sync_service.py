@@ -4,12 +4,12 @@ import logging
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
 from core.github import GitHubSyncer
-from models.repository import Repository, SyncLog
+from models.repository import Repository, SyncLog, Setting
 from services.domain import StateTransitionService
 from services.readme_cleaning.cleaner import ReadmeCleaner
 from services.application.analysis_service import AnalysisService
@@ -218,7 +218,25 @@ class SyncService:
             db.add(log)
             await db.commit()
 
+            # Update last_sync_at setting on successful sync
+            if log.status == "success":
+                await self._update_last_sync_at(db)
+
         return log
+
+    async def _update_last_sync_at(self, db: AsyncSession) -> None:
+        """Update the last_sync_at setting with current timestamp."""
+        try:
+            result = await db.execute(select(Setting).where(Setting.key == "last_sync_at"))
+            setting = result.scalar_one_or_none()
+            now_iso = datetime.utcnow().isoformat()
+            if setting:
+                setting.value = now_iso
+            else:
+                db.add(Setting(key="last_sync_at", value=now_iso))
+            await db.commit()
+        except Exception as e:
+            logger.warning("Failed to update last_sync_at: %s", e)
 
     async def run_ai_analysis(self, db: AsyncSession) -> dict:
         return await self.analysis_service.run_pending_repository_analysis(db)
@@ -241,14 +259,16 @@ class SyncService:
         )
         indexed_repos = indexed_result.scalar() or 0
 
+        # A repo is pending AI analysis if analyze_status is not "success"
+        # This means: pending, failed, running, or never analyzed (NULL/empty)
         pending_result = await db.execute(
             select(func.count(Repository.id)).where(
                 or_(
-                    Repository.process_status.in_(["cleaned", "failed"]),
-                    Repository.analyze_status.in_(["pending", "failed", "running"]),
-                    Repository.repo_metadata_embedding.is_(None),
-                    Repository.readme_embedding.is_(None),
-                    Repository.embedding_version != self.settings.embedding_version,
+                    Repository.analyze_status == None,
+                    Repository.analyze_status == "",
+                    Repository.analyze_status == "pending",
+                    Repository.analyze_status == "failed",
+                    Repository.analyze_status == "running",
                 )
             )
         )

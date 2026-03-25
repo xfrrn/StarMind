@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.database import get_db
 from routers.schemas import SettingsResponse, SettingsUpdate, TestConnectionResponse
 from services.service_registry import get_settings_service
+from services.application.scheduler_service import update_scheduler_job
 
 router = APIRouter(prefix="/api", tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -28,7 +29,21 @@ async def update_settings(
 ):
     """Update user settings."""
     service = get_settings_service()
-    return await service.update_user_settings(db, updates.model_dump())
+    result = await service.update_user_settings(db, updates.model_dump())
+
+    # Update scheduler if auto-sync settings changed
+    if any(k in updates.model_dump(exclude_none=True) for k in
+           ["auto_sync_enabled", "auto_sync_time", "timezone"]):
+        try:
+            await update_scheduler_job(
+                enabled=result.get("auto_sync_enabled", False),
+                time_str=result.get("auto_sync_time", "00:00"),
+                timezone=result.get("timezone", "Asia/Shanghai"),
+            )
+        except Exception as e:
+            logger.warning("Failed to update scheduler: %s", e)
+
+    return result
 
 
 @router.post("/settings/test-github", response_model=TestConnectionResponse)

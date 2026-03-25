@@ -31,6 +31,12 @@ class SettingsResponse(BaseModel):
     auto_summarize: bool = True
     include_readmes: bool = True
 
+    # === Auto Sync ===
+    auto_sync_enabled: bool = False
+    auto_sync_time: str = "00:00"  # HH:MM format
+    timezone: str = "Asia/Shanghai"
+    last_sync_at: str | None = None  # ISO format datetime
+
 
 class SettingsUpdate(BaseModel):
     """Update model for user settings."""
@@ -61,6 +67,11 @@ class SettingsUpdate(BaseModel):
     # === Feature Toggles ===
     auto_summarize: bool | None = None
     include_readmes: bool | None = None
+
+    # === Auto Sync ===
+    auto_sync_enabled: bool | None = None
+    auto_sync_time: str | None = None  # HH:MM format
+    timezone: str | None = None
 
 
 class TestConnectionResponse(BaseModel):

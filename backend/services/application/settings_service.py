@@ -41,6 +41,11 @@ class SettingsService:
         "github_sync_page_concurrency": "4",
         "github_readme_concurrency": "8",
         "ai_analysis_concurrency": "1",
+        # Auto sync
+        "auto_sync_enabled": "false",
+        "auto_sync_time": "00:00",
+        "timezone": "Asia/Shanghai",
+        "last_sync_at": "",
     }
 
     async def _get_setting(self, db: AsyncSession, key: str, decrypt: bool = False) -> str:
@@ -104,6 +109,7 @@ class SettingsService:
         # Get sensitive values (decrypted for masking)
         github_token = await self._get_setting(db, "github_token", decrypt=True)
         openai_api_key = await self._get_setting(db, "openai_api_key", decrypt=True)
+        last_sync_at = await self._get_setting(db, "last_sync_at")
 
         return {
             # === User Info ===
@@ -142,6 +148,13 @@ class SettingsService:
             "include_readmes": self._parse_bool(
                 await self._get_setting(db, "include_readmes")
             ),
+            # === Auto Sync ===
+            "auto_sync_enabled": self._parse_bool(
+                await self._get_setting(db, "auto_sync_enabled")
+            ),
+            "auto_sync_time": await self._get_setting(db, "auto_sync_time") or "00:00",
+            "timezone": await self._get_setting(db, "timezone") or "Asia/Shanghai",
+            "last_sync_at": last_sync_at if last_sync_at else None,
         }
 
     async def update_user_settings(self, db: AsyncSession, updates: dict) -> dict:
@@ -207,6 +220,16 @@ class SettingsService:
             await self._set_setting(
                 db, "include_readmes", str(updates["include_readmes"]).lower()
             )
+
+        # === Auto Sync ===
+        if updates.get("auto_sync_enabled") is not None:
+            await self._set_setting(
+                db, "auto_sync_enabled", str(updates["auto_sync_enabled"]).lower()
+            )
+        if updates.get("auto_sync_time") is not None:
+            await self._set_setting(db, "auto_sync_time", updates["auto_sync_time"])
+        if updates.get("timezone") is not None:
+            await self._set_setting(db, "timezone", updates["timezone"])
 
         await db.commit()
         return await self.get_user_settings(db)

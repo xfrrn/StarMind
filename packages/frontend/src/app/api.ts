@@ -371,6 +371,11 @@ export interface SettingsData {
     // Feature Toggles
     auto_summarize: boolean;
     include_readmes: boolean;
+    // Auto Sync
+    auto_sync_enabled: boolean;
+    auto_sync_time: string;
+    timezone: string;
+    last_sync_at: string | null;
 }
 
 export interface SettingsUpdate {
@@ -389,6 +394,9 @@ export interface SettingsUpdate {
     ai_analysis_concurrency?: number;
     auto_summarize?: boolean;
     include_readmes?: boolean;
+    auto_sync_enabled?: boolean;
+    auto_sync_time?: string;
+    timezone?: string;
 }
 
 export interface TestConnectionResponse {

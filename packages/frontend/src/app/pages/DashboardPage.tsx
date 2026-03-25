@@ -6,6 +6,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { fetchDashboard, type DashboardResponse } from '../api';
+import { UnanalyzedBanner } from '../components/UnanalyzedBanner';
 
 const COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
@@ -48,6 +49,9 @@ export function DashboardPage() {
 
   return (
     <div className="w-full max-w-[1520px] mx-auto py-8 px-6 xl:px-10">
+      {/* Unanalyzed Repos Banner */}
+      <UnanalyzedBanner />
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}

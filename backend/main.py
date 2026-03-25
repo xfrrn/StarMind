@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
 from routers import chat, conversations, repositories, sync, settings, collections, dashboard, public, backup
+from services.application.scheduler_service import init_scheduler, get_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +23,22 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 StarMind backend starting up...")
     await init_db()
     logger.info("✅ Database initialized")
+
+    # Initialize scheduler for auto-sync
+    try:
+        await init_scheduler()
+        logger.info("✅ Scheduler initialized")
+    except Exception as e:
+        logger.warning("Failed to initialize scheduler: %s", e)
+
     yield
+
+    # Shutdown scheduler
+    try:
+        get_scheduler().shutdown()
+    except Exception:
+        pass
+
     logger.info("👋 StarMind backend shutting down...")
 
 
