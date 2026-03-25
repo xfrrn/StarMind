@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Repository, FolderOpen, Activity, Star, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { Github, FolderOpen, Activity, Star, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -70,7 +70,7 @@ export function DashboardPage() {
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10"
       >
         <StatCard
-          icon={Repository}
+          icon={Github}
           label="Total Repositories"
           value={data.total_repos.toLocaleString()}
           color="blue"
@@ -260,7 +260,7 @@ export function DashboardPage() {
           to="/repositories"
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
         >
-          <Repository className="w-4 h-4" />
+          <Github className="w-4 h-4" />
           Browse Repositories
         </Link>
         <Link
