@@ -8,6 +8,10 @@ import {
   Edit3,
   X,
   Plus,
+  Share2,
+  Copy,
+  Check,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -16,6 +20,9 @@ import {
   deleteCollection,
   updateCollection,
   removeRepoFromCollection,
+  getShareStatus,
+  createShare,
+  deleteShare,
   type Collection,
   type CollectionRepo,
 } from '../api';
@@ -79,15 +86,21 @@ export function CollectionDetailPage() {
   const [editIcon, setEditIcon] = useState('folder');
   const [saving, setSaving] = useState(false);
 
+  // Share state
+  const [shareStatus, setShareStatus] = useState<{ is_shared: boolean; share_id: string | null; view_count: number } | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
 
     Promise.all([
       getCollection(id),
-      getCollectionRepos(id, 1, 20)
+      getCollectionRepos(id, 1, 20),
+      getShareStatus(id)
     ])
-      .then(([collectionData, reposData]) => {
+      .then(([collectionData, reposData, shareData]) => {
         setCollection(collectionData);
         setRepos(reposData.repositories);
         setHasMore(reposData.has_more);
@@ -97,6 +110,8 @@ export function CollectionDetailPage() {
         setEditTags(collectionData.tags);
         setEditColor(collectionData.color || PRESET_COLORS[0]);
         setEditIcon(collectionData.icon || 'folder');
+        // Initialize share status
+        setShareStatus(shareData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -168,6 +183,34 @@ export function CollectionDetailPage() {
     }
   };
 
+  const handleCreateShare = async () => {
+    if (!id) return;
+    try {
+      const share = await createShare(id);
+      setShareStatus({ is_shared: true, share_id: share.share_id, view_count: 0 });
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteShare = async () => {
+    if (!id || !confirm('Remove public access to this collection?')) return;
+    try {
+      await deleteShare(id);
+      setShareStatus({ is_shared: false, share_id: null, view_count: 0 });
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleCopyShareLink = () => {
+    if (!shareStatus?.share_id) return;
+    const url = `${window.location.origin}/shared/${shareStatus.share_id}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -230,6 +273,13 @@ export function CollectionDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-xl font-medium transition-colors"
+            >
+              <Share2 className="w-4 h-4" />
+              Share
+            </button>
             <button
               onClick={() => setShowEditModal(true)}
               className="flex items-center gap-2 px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl font-medium transition-colors"
@@ -360,6 +410,88 @@ export function CollectionDetailPage() {
                 onSave={handleEditCollection}
                 onClose={() => setShowEditModal(false)}
               />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {showShareModal && (
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => e.target === e.currentTarget && setShowShareModal(false)}
+          >
+            <motion.div
+              variants={modalContentVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  Share Collection
+                </h2>
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {shareStatus?.is_shared ? (
+                  <>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      This collection is publicly accessible via the link below.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}/shared/${shareStatus.share_id}`}
+                        className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400"
+                      />
+                      <button
+                        onClick={handleCopyShareLink}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+                      <span>{shareStatus.view_count} views</span>
+                    </div>
+                    <button
+                      onClick={handleDeleteShare}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remove Public Access
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      Create a public link to share this collection with others.
+                      Anyone with the link will be able to view the repositories.
+                    </p>
+                    <button
+                      onClick={handleCreateShare}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Create Share Link
+                    </button>
+                  </>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

@@ -1,9 +1,12 @@
 """Collections router - manage repository collections."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
+from models.shared_collection import SharedCollection
 from routers.schemas import (
     CollectionCreate,
     CollectionUpdate,
@@ -15,6 +18,18 @@ from routers.schemas import (
 from services.application.collection_service import CollectionService
 
 router = APIRouter(prefix="/api", tags=["collections"])
+
+
+class ShareResponse(BaseModel):
+    share_id: str
+    share_url: str
+
+
+class ShareStatusResponse(BaseModel):
+    is_shared: bool
+    share_id: str | None = None
+    share_url: str | None = None
+    view_count: int = 0
 
 # Service instance
 _collection_service = CollectionService()
@@ -248,3 +263,79 @@ async def get_all_tags(
     service = get_collection_service()
     tags = await service.get_all_tags(db)
     return {"tags": tags}
+
+
+# ---- Share endpoints ----
+
+@router.get("/collections/{collection_id}/share", response_model=ShareStatusResponse)
+async def get_share_status(
+    collection_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get share status for a collection."""
+    result = await db.execute(
+        select(SharedCollection).where(SharedCollection.collection_id == collection_id)
+    )
+    share = result.scalar_one_or_none()
+
+    if not share:
+        return ShareStatusResponse(is_shared=False, view_count=0)
+
+    return ShareStatusResponse(
+        is_shared=True,
+        share_id=share.share_id,
+        share_url=f"/shared/{share.share_id}",
+        view_count=share.view_count,
+    )
+
+
+@router.post("/collections/{collection_id}/share", response_model=ShareResponse)
+async def create_share(
+    collection_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a share link for a collection."""
+    # Check if collection exists
+    service = get_collection_service()
+    collection = await service.get_collection(db, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    # Check if already shared
+    result = await db.execute(
+        select(SharedCollection).where(SharedCollection.collection_id == collection_id)
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        return ShareResponse(
+            share_id=existing.share_id,
+            share_url=f"/shared/{existing.share_id}",
+        )
+
+    # Create new share
+    share = SharedCollection(collection_id=collection_id)
+    db.add(share)
+    await db.commit()
+    await db.refresh(share)
+
+    return ShareResponse(
+        share_id=share.share_id,
+        share_url=f"/shared/{share.share_id}",
+    )
+
+
+@router.delete("/collections/{collection_id}/share", status_code=204)
+async def delete_share(
+    collection_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete share link for a collection."""
+    result = await db.execute(
+        select(SharedCollection).where(SharedCollection.collection_id == collection_id)
+    )
+    share = result.scalar_one_or_none()
+
+    if share:
+        await db.delete(share)
+        await db.commit()
