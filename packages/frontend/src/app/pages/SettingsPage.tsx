@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Key,
@@ -10,18 +10,23 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Download,
+  Upload,
+  Database,
 } from 'lucide-react';
 import {
   fetchSettings,
   updateSettings,
   testGithubConnection,
   testOpenaiConnection,
+  getBackupExportUrl,
+  importBackup,
   type SettingsData,
   type SettingsUpdate,
 } from '../api';
 import { useTheme, type Theme } from '../hooks/useTheme';
 
-type TabId = 'account' | 'api-keys' | 'ai-config' | 'sync' | 'appearance';
+type TabId = 'account' | 'api-keys' | 'ai-config' | 'sync' | 'appearance' | 'backup';
 
 const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'account', label: 'Account', icon: User },
@@ -29,6 +34,7 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'ai-config', label: 'AI Config', icon: Sparkles },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
   { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'backup', label: 'Backup', icon: Database },
 ];
 
 export function SettingsPage() {
@@ -63,6 +69,11 @@ export function SettingsPage() {
   const [testingOpenai, setTestingOpenai] = useState(false);
   const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [openaiTestResult, setOpenaiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Backup state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ collections: number; notes: number; repos_added: number } | null>(null);
 
   useEffect(() => {
     fetchSettings()
@@ -127,6 +138,40 @@ export function SettingsPage() {
       setOpenaiTestResult({ success: false, message: err.message });
     } finally {
       setTestingOpenai(false);
+    }
+  };
+
+  const handleExport = () => {
+    const url = getBackupExportUrl();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `starmind-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showMessage('success', 'Backup exported successfully.');
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm('Importing will add to existing data (not replace). Continue?')) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importBackup(file);
+      setImportResult(result.stats);
+      showMessage('success', `Imported ${result.stats.collections} collections, ${result.stats.notes} notes`);
+    } catch (err: any) {
+      showMessage('error', `Import failed: ${err.message}`);
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -551,6 +596,77 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          </section>
+        );
+      case 'backup':
+        return (
+          <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-zinc-200 dark:border-zinc-800">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Data Backup</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Export or import your collections and notes.
+              </p>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Export */}
+              <div className="flex items-start justify-between gap-4 p-4 bg-zinc-50 dark:bg-zinc-950 rounded-xl">
+                <div className="flex-1">
+                  <h3 className="font-medium text-zinc-900 dark:text-zinc-50">Export Data</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                    Download a JSON backup of your collections and notes.
+                  </p>
+                </div>
+                <button
+                  onClick={handleExport}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
+              </div>
+
+              {/* Import */}
+              <div className="flex items-start justify-between gap-4 p-4 bg-zinc-50 dark:bg-zinc-950 rounded-xl">
+                <div className="flex-1">
+                  <h3 className="font-medium text-zinc-900 dark:text-zinc-50">Import Data</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                    Restore from a backup file. This will add to existing data.
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleImport}
+                    className="hidden"
+                  />
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {importing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {importing ? 'Importing...' : 'Import'}
+                </button>
+              </div>
+
+              {/* Import Result */}
+              {importResult && (
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-medium mb-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Import Successful
+                  </div>
+                  <div className="text-sm text-emerald-600 dark:text-emerald-400">
+                    Imported {importResult.collections} collections, {importResult.notes} notes, {importResult.repos_added} repository links.
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         );
