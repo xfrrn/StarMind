@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import {
   Folder,
   Star,
@@ -92,6 +93,7 @@ const modalContentVariants = {
 };
 
 export function CollectionsPage() {
+  const { t } = useTranslation();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -176,7 +178,7 @@ export function CollectionsPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete collection "${name}"? This cannot be undone.`)) return;
+    if (!confirm(t('collections.deleteConfirm', { name }))) return;
 
     try {
       await deleteCollection(id);
@@ -214,10 +216,10 @@ export function CollectionsPage() {
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Collections
+            {t('collections.title')}
           </h1>
           <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-lg">
-            Organize your starred repositories into collections
+            {t('collections.description')}
           </p>
         </div>
         <button
@@ -225,7 +227,7 @@ export function CollectionsPage() {
           className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
-          New Collection
+          {t('collections.newCollection')}
         </button>
       </div>
 
@@ -243,13 +245,13 @@ export function CollectionsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search collections..."
+            placeholder={t('collections.searchPlaceholder')}
             className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-zinc-500">Filter:</span>
+            <span className="text-sm text-zinc-500">{t('common.filter')}:</span>
             {allTags.map((tag) => (
               <button
                 key={tag}
@@ -272,7 +274,7 @@ export function CollectionsPage() {
                 onClick={() => setSelectedTags([])}
                 className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
               >
-                Clear
+                {t('common.clear')}
               </button>
             )}
           </div>
@@ -284,12 +286,12 @@ export function CollectionsPage() {
         <div className="text-center py-20">
           <Folder className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
           <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-50 mb-2">
-            {collections.length === 0 ? 'No collections yet' : 'No matching collections'}
+            {collections.length === 0 ? t('collections.noCollections') : t('collections.noMatchingCollections')}
           </h3>
           <p className="text-zinc-500 dark:text-zinc-400 mb-6">
             {collections.length === 0
-              ? 'Create your first collection to organize repositories'
-              : 'Try adjusting your search or filters'}
+              ? t('collections.noCollectionsHint')
+              : t('collections.noMatchingHint')}
           </p>
           {collections.length === 0 && (
             <button
@@ -297,7 +299,7 @@ export function CollectionsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Create Collection
+              {t('collections.createCollection')}
             </button>
           )}
         </div>
@@ -338,6 +340,7 @@ export function CollectionsPage() {
               className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
             >
               <CollectionModalContent
+                t={t}
                 isEdit={!!editingId}
                 name={formName}
                 setName={setFormName}
@@ -401,7 +404,7 @@ function CollectionCard({
               {collection.name}
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {collection.repo_count} repositories
+              {t('collections.repositories', { count: collection.repo_count })}
             </p>
           </div>
         </div>
@@ -484,7 +487,7 @@ function CollectionCard({
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <Edit3 className="w-4 h-4" />
-                  Edit
+                  {t('common.edit')}
                 </button>
                 <button
                   onClick={(e) => {
@@ -496,7 +499,7 @@ function CollectionCard({
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete
+                  {t('common.delete')}
                 </button>
               </motion.div>
             </>
@@ -508,6 +511,7 @@ function CollectionCard({
 }
 
 function CollectionModalContent({
+  t,
   isEdit,
   name,
   setName,
@@ -523,6 +527,7 @@ function CollectionModalContent({
   onSave,
   onClose,
 }: {
+  t: (key: string, options?: Record<string, unknown>) => string;
   isEdit: boolean;
   name: string;
   setName: (v: string) => void;
@@ -557,7 +562,7 @@ function CollectionModalContent({
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          {isEdit ? 'Edit Collection' : 'Create Collection'}
+          {isEdit ? t('collections.editCollection') : t('collections.createCollection')}
         </h2>
         <button
           onClick={onClose}
@@ -572,13 +577,13 @@ function CollectionModalContent({
         {/* Name */}
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Name *
+            {t('collections.name')} *
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., AI Tools"
+            placeholder={t('collections.namePlaceholder')}
             className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -586,12 +591,12 @@ function CollectionModalContent({
         {/* Description */}
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Description
+            {t('collections.description')}
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's this collection about?"
+            placeholder={t('collections.descriptionPlaceholder')}
             rows={2}
             className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
@@ -600,7 +605,7 @@ function CollectionModalContent({
         {/* Tags */}
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Tags
+            {t('collections.tags')}
           </label>
           <div className="flex gap-2 mb-2">
             <input
@@ -608,14 +613,14 @@ function CollectionModalContent({
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-              placeholder="Add a tag..."
+              placeholder={t('collections.tagsPlaceholder')}
               className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               onClick={addTag}
               className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors"
             >
-              Add
+              {t('common.add')}
             </button>
           </div>
           {tags.length > 0 && (
@@ -641,7 +646,7 @@ function CollectionModalContent({
         {/* Icon */}
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Icon
+            {t('collections.icon')}
           </label>
           <div className="flex gap-2">
             {Object.entries(ICON_MAP).map(([iconName, IconComponent]) => (
@@ -668,7 +673,7 @@ function CollectionModalContent({
         {/* Color */}
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-            Color
+            {t('collections.color')}
           </label>
           <div className="flex gap-2">
             {PRESET_COLORS.map((c) => (
@@ -694,14 +699,14 @@ function CollectionModalContent({
           onClick={onClose}
           className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           onClick={onSave}
           disabled={!name.trim() || saving}
           className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
         >
-          {saving ? 'Saving...' : isEdit ? 'Save' : 'Create'}
+          {saving ? t('common.saving') : isEdit ? t('common.save') : t('common.create')}
         </button>
       </div>
     </>

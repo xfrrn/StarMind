@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   User,
   Key,
@@ -29,15 +30,6 @@ import { useTheme, type Theme } from '../hooks/useTheme';
 
 type TabId = 'account' | 'api-keys' | 'ai-config' | 'sync' | 'appearance' | 'backup';
 
-const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'account', label: 'Account', icon: User },
-  { id: 'api-keys', label: 'API Keys', icon: Key },
-  { id: 'ai-config', label: 'AI Config', icon: Sparkles },
-  { id: 'sync', label: 'Sync', icon: RefreshCw },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'backup', label: 'Backup', icon: Database },
-];
-
 // Common timezones
 const TIMEZONES = [
   { value: 'Pacific/Auckland', label: 'Auckland (UTC+12/+13)' },
@@ -55,6 +47,17 @@ const TIMEZONES = [
 ];
 
 export function SettingsPage() {
+  const { t } = useTranslation();
+
+  const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+    { id: 'account', label: t('settings.tabs.account'), icon: User },
+    { id: 'api-keys', label: t('settings.tabs.apiKeys'), icon: Key },
+    { id: 'ai-config', label: t('settings.tabs.aiConfig'), icon: Sparkles },
+    { id: 'sync', label: t('settings.tabs.sync'), icon: RefreshCw },
+    { id: 'appearance', label: t('settings.tabs.appearance'), icon: Palette },
+    { id: 'backup', label: t('settings.tabs.backup'), icon: Database },
+  ];
+
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

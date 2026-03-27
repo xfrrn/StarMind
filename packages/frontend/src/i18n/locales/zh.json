@@ -14,7 +14,12 @@
     "notConfigured": "未配置",
     "connected": "已连接",
     "notSet": "未设置",
-    "configured": "已配置"
+    "configured": "已配置",
+    "add": "添加",
+    "create": "创建",
+    "saving": "保存中...",
+    "filter": "筛选",
+    "noData": "暂无数据"
   },
   "nav": {
     "workspace": "工作区",
@@ -94,10 +99,19 @@
   "settings": {
     "title": "设置",
     "description": "管理你的个人信息和 API 密钥。",
+    "tabs": {
+      "account": "账户",
+      "apiKeys": "API 密钥",
+      "aiConfig": "AI 配置",
+      "sync": "同步",
+      "appearance": "外观",
+      "backup": "备份"
+    },
     "profile": "个人信息",
     "profileDescription": "你的个人资料",
     "firstName": "名",
     "lastName": "姓",
+    "email": "邮箱",
     "githubUsername": "GitHub 用户名",
     "apiKeys": "API 密钥",
     "apiKeysDescription": "配置外部服务的 API 密钥",
@@ -105,22 +119,55 @@
     "githubTokenDescription": "同步 Star 仓库所需",
     "openaiKey": "OpenAI API Key",
     "openaiKeyDescription": "AI 搜索和分析所需",
+    "openaiBaseUrl": "OpenAI Base URL",
+    "openaiModel": "OpenAI 模型",
     "getGithubPat": "获取 GitHub PAT",
     "getOpenaiKey": "获取 OpenAI API Key",
     "tokenSet": "已设置",
     "tokenNotSet": "未设置",
-    "saved": "设置保存成功"
+    "saved": "设置保存成功",
+    "testConnection": "测试连接",
+    "testing": "测试中...",
+    "connectionSuccess": "连接成功",
+    "connectionFailed": "连接失败"
   },
   "collections": {
     "title": "收藏集",
-    "description": "将仓库整理到收藏集中以便快速访问。",
+    "description": "将 Star 仓库整理到收藏集中",
+    "newCollection": "新建收藏集",
     "createCollection": "创建收藏集",
+    "editCollection": "编辑收藏集",
+    "searchPlaceholder": "搜索收藏集...",
     "noCollections": "暂无收藏集",
-    "noCollectionsHint": "创建你的第一个收藏集来整理仓库。"
+    "noMatchingCollections": "未找到匹配的收藏集",
+    "noCollectionsHint": "创建你的第一个收藏集来整理仓库",
+    "noMatchingHint": "请调整搜索条件或筛选器",
+    "repositories": "{{count}} 个仓库",
+    "name": "名称",
+    "namePlaceholder": "例如：AI 工具",
+    "description": "描述",
+    "descriptionPlaceholder": "这个收藏集是关于什么的？",
+    "tags": "标签",
+    "tagsPlaceholder": "添加标签...",
+    "icon": "图标",
+    "color": "颜色",
+    "recentlyAdded": "最近添加：",
+    "deleteConfirm": "确定删除收藏集「{{name}}」吗？此操作无法撤销。"
   },
   "dashboard": {
     "title": "仪表盘",
-    "overview": "概览"
+    "description": "你的 Star 仓库概览",
+    "totalRepos": "仓库总数",
+    "collections": "收藏集",
+    "languages": "编程语言",
+    "categories": "分类",
+    "starsDistribution": "Stars 分布",
+    "activityLevels": "活跃度",
+    "noLanguageData": "暂无编程语言数据",
+    "noCategoryData": "暂无分类数据",
+    "noActivityData": "暂无活跃度数据",
+    "browseRepos": "浏览仓库",
+    "viewCollections": "查看收藏集"
   },
   "header": {
     "overview": "概览",

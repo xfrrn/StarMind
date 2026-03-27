@@ -14,7 +14,12 @@
     "notConfigured": "Not configured",
     "connected": "Connected",
     "notSet": "Not set",
-    "configured": "Configured"
+    "configured": "Configured",
+    "add": "Add",
+    "create": "Create",
+    "saving": "Saving...",
+    "filter": "Filter",
+    "noData": "No data available"
   },
   "nav": {
     "workspace": "Workspace",
@@ -94,10 +99,19 @@
   "settings": {
     "title": "Settings",
     "description": "Manage your profile and API keys.",
+    "tabs": {
+      "account": "Account",
+      "apiKeys": "API Keys",
+      "aiConfig": "AI Config",
+      "sync": "Sync",
+      "appearance": "Appearance",
+      "backup": "Backup"
+    },
     "profile": "Profile",
     "profileDescription": "Your personal information",
     "firstName": "First Name",
     "lastName": "Last Name",
+    "email": "Email",
     "githubUsername": "GitHub Username",
     "apiKeys": "API Keys",
     "apiKeysDescription": "Configure your API keys for external services",
@@ -105,22 +119,55 @@
     "githubTokenDescription": "Required for syncing your starred repositories",
     "openaiKey": "OpenAI API Key",
     "openaiKeyDescription": "Required for AI-powered search and analysis",
+    "openaiBaseUrl": "OpenAI Base URL",
+    "openaiModel": "OpenAI Model",
     "getGithubPat": "Get GitHub PAT",
     "getOpenaiKey": "Get OpenAI API Key",
     "tokenSet": "Token is set",
     "tokenNotSet": "Token not set",
-    "saved": "Settings saved successfully"
+    "saved": "Settings saved successfully",
+    "testConnection": "Test Connection",
+    "testing": "Testing...",
+    "connectionSuccess": "Connection successful",
+    "connectionFailed": "Connection failed"
   },
   "collections": {
     "title": "Collections",
-    "description": "Organize your repositories into collections for easy access.",
+    "description": "Organize your starred repositories into collections",
+    "newCollection": "New Collection",
     "createCollection": "Create Collection",
+    "editCollection": "Edit Collection",
+    "searchPlaceholder": "Search collections...",
     "noCollections": "No collections yet",
-    "noCollectionsHint": "Create your first collection to organize repositories."
+    "noMatchingCollections": "No matching collections",
+    "noCollectionsHint": "Create your first collection to organize repositories",
+    "noMatchingHint": "Try adjusting your search or filters",
+    "repositories": "{{count}} repositories",
+    "name": "Name",
+    "namePlaceholder": "e.g., AI Tools",
+    "description": "Description",
+    "descriptionPlaceholder": "What's this collection about?",
+    "tags": "Tags",
+    "tagsPlaceholder": "Add a tag...",
+    "icon": "Icon",
+    "color": "Color",
+    "recentlyAdded": "Recently added:",
+    "deleteConfirm": "Delete collection \"{{name}}\"? This cannot be undone."
   },
   "dashboard": {
     "title": "Dashboard",
-    "overview": "Overview"
+    "description": "Overview of your starred repositories",
+    "totalRepos": "Total Repositories",
+    "collections": "Collections",
+    "languages": "Languages",
+    "categories": "Categories",
+    "starsDistribution": "Stars Distribution",
+    "activityLevels": "Activity Levels",
+    "noLanguageData": "No language data available",
+    "noCategoryData": "No category data available",
+    "noActivityData": "No activity data available",
+    "browseRepos": "Browse Repositories",
+    "viewCollections": "View Collections"
   },
   "header": {
     "overview": "Overview",

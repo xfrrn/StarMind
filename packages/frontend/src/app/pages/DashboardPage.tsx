@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Github, FolderOpen, Activity, Star, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -20,6 +21,7 @@ const ACTIVITY_COLORS: Record<string, string> = {
 };
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -59,10 +61,10 @@ export function DashboardPage() {
         className="mb-8"
       >
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Dashboard
+          {t('dashboard.title')}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-lg">
-          Overview of your starred repositories
+          {t('dashboard.description')}
         </p>
       </motion.div>
 
@@ -75,25 +77,25 @@ export function DashboardPage() {
       >
         <StatCard
           icon={Github}
-          label="Total Repositories"
+          label={t('dashboard.totalRepos')}
           value={data.total_repos.toLocaleString()}
           color="blue"
         />
         <StatCard
           icon={FolderOpen}
-          label="Collections"
+          label={t('dashboard.collections')}
           value={data.total_collections.toLocaleString()}
           color="violet"
         />
         <StatCard
           icon={Activity}
-          label="Languages"
+          label={t('dashboard.languages')}
           value={data.languages.length.toString()}
           color="emerald"
         />
         <StatCard
           icon={TrendingUp}
-          label="Categories"
+          label={t('dashboard.categories')}
           value={data.categories.length.toString()}
           color="amber"
         />
@@ -111,7 +113,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 mb-6">
             <PieChartIcon className="w-5 h-5 text-blue-500" />
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Languages
+              {t('dashboard.languages')}
             </h2>
           </div>
           {data.languages.length > 0 ? (
@@ -136,7 +138,7 @@ export function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="h-[300px] flex items-center justify-center text-zinc-400">
-              No language data available
+              {t('dashboard.noLanguageData')}
             </div>
           )}
         </motion.div>
@@ -151,7 +153,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 mb-6">
             <Star className="w-5 h-5 text-amber-500" />
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Stars Distribution
+              {t('dashboard.starsDistribution')}
             </h2>
           </div>
           <ResponsiveContainer width="100%" height={300}>
@@ -182,7 +184,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-emerald-500" />
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Categories
+              {t('dashboard.categories')}
             </h2>
           </div>
           {data.categories.length > 0 ? (
@@ -204,7 +206,7 @@ export function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="h-[300px] flex items-center justify-center text-zinc-400">
-              No category data available
+              {t('dashboard.noCategoryData')}
             </div>
           )}
         </motion.div>
@@ -219,7 +221,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 mb-6">
             <Activity className="w-5 h-5 text-violet-500" />
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Activity Levels
+              {t('dashboard.activityLevels')}
             </h2>
           </div>
           {data.activity_levels.length > 0 ? (
@@ -247,7 +249,7 @@ export function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="h-[300px] flex items-center justify-center text-zinc-400">
-              No activity data available
+              {t('dashboard.noActivityData')}
             </div>
           )}
         </motion.div>
@@ -265,14 +267,14 @@ export function DashboardPage() {
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
         >
           <Github className="w-4 h-4" />
-          Browse Repositories
+          {t('dashboard.browseRepos')}
         </Link>
         <Link
           to="/collections"
           className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors border border-zinc-200 dark:border-zinc-700"
         >
           <FolderOpen className="w-4 h-4" />
-          View Collections
+          {t('dashboard.viewCollections')}
         </Link>
       </motion.div>
     </div>
