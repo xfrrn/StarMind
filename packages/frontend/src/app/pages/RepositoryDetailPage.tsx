@@ -28,6 +28,24 @@ function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): strin
     : `${normalizedRepoUrl}/blob/HEAD/${cleanedPath}`;
 }
 
+function formatRelativeTime(isoString: string | null | undefined): string {
+  if (!isoString) return '';
+
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const seconds = Math.floor(diffMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return `${seconds} seconds ago`;
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  return date.toLocaleDateString();
+}
+
 export function RepositoryDetailPage() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -180,7 +198,7 @@ export function RepositoryDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-500" />
-              <span>{t('repoDetail.updated')} {repo.lastUpdated}</span>
+              <span>{t('repoDetail.updated')} {formatRelativeTime(repo.updatedAt) || repo.lastUpdated}</span>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ export interface Repository {
   hasAPI: boolean;
   activityLevel: 'High' | 'Medium' | 'Low';
   lastUpdated: string;
+  updatedAt?: string;  // ISO timestamp for dynamic relative time calculation
   readme: string;
   url: string;
 }

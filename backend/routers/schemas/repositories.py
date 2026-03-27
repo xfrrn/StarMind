@@ -14,6 +14,7 @@ class RepoOut(BaseModel):
     hasAPI: bool = False
     activityLevel: str = "Medium"
     lastUpdated: str = ""
+    updatedAt: str | None = None
     readme: str = ""
     url: str = ""
 
