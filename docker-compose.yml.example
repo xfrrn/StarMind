@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: starmind_db
+    restart: always
+    environment:
+      POSTGRES_USER: starmind
+      POSTGRES_PASSWORD: starmind_password
+      POSTGRES_DB: starmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U starmind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: starmind_backend
+    restart: always
+    environment:
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://starmind:starmind_password@db:5432/starmind
+      # GitHub (required)
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_SYNC_PAGE_CONCURRENCY=${GITHUB_SYNC_PAGE_CONCURRENCY:-4}
+      - GITHUB_README_CONCURRENCY=${GITHUB_README_CONCURRENCY:-8}
+      # OpenAI (required)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1536}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-v2}
+      # AI Analysis
+      - AI_ANALYSIS_CONCURRENCY=${AI_ANALYSIS_CONCURRENCY:-1}
+      - AI_ANALYSIS_REQUEST_DELAY_SECONDS=${AI_ANALYSIS_REQUEST_DELAY_SECONDS:-0.5}
+      # Chat
+      - CHAT_SIMILARITY_THRESHOLD=${CHAT_SIMILARITY_THRESHOLD:-0.5}
+      - CHAT_LLM_FILTER_ENABLED=${CHAT_LLM_FILTER_ENABLED:-true}
+      # Security
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      # Server
+      - HOST=0.0.0.0
+      - PORT=8000
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:5173}
+    ports:
+      - "8000:8000"
+    volumes:
+      - archive_data:/app/data/archives
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+    container_name: starmind_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  archive_data:
