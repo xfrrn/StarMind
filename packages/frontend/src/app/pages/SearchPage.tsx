@@ -2,11 +2,13 @@ import React, { useCallback, useEffect } from 'react';
 import { Search, Sparkles, MessageSquare, Loader2, Clock, X, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTranslation } from 'react-i18next';
 import { RepoCard } from '../components/RepoCard';
 import { useSearch, useSearchHistory } from '../hooks';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SearchPage() {
+  const { t } = useTranslation();
   const { state, doSearch, setQuery, reset } = useSearch();
   const { query, isSearching, hasSearched, answer, results, error, statusMessage } = state;
   const { history, addHistory, removeHistory, clearHistory } = useSearchHistory();
@@ -32,10 +34,10 @@ export function SearchPage() {
     <div className="max-w-4xl mx-auto py-12 px-6">
       <div className="text-center mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl mb-3">
-          What are you looking for?
+          {t('search.title')}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 text-lg">
-          Ask questions to find the best projects from your starred repositories.
+          {t('search.subtitle')}
         </p>
       </div>
 
@@ -47,7 +49,7 @@ export function SearchPage() {
           <input
             type="text"
             className="block w-full pl-12 pr-16 py-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg shadow-sm transition-all"
-            placeholder="Find a Python project for building a RAG system..."
+            placeholder={t('search.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -59,7 +61,7 @@ export function SearchPage() {
             {isSearching ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900 rounded-full animate-spin" />
             ) : (
-              <span>Ask</span>
+              <span>{t('search.ask')}</span>
             )}
           </button>
         </form>
@@ -85,7 +87,7 @@ export function SearchPage() {
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                      AI Summary
+                      {t('search.aiSummary')}
                     </h2>
                   </div>
                   <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none">
@@ -100,7 +102,7 @@ export function SearchPage() {
                     <div className="mb-6 flex items-center justify-between">
                       <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
                         <LibraryIcon className="w-5 h-5 text-zinc-400" />
-                        Recommended Repositories
+                        {t('search.recommendedRepos')}
                       </h3>
                     </div>
 
@@ -145,14 +147,14 @@ export function SearchPage() {
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                  Recent Searches
+                  {t('search.recentSearches')}
                 </h3>
                 <button
                   onClick={clearHistory}
                   className="text-xs text-zinc-400 hover:text-red-500 transition-colors flex items-center gap-1"
                 >
                   <Trash2 className="w-3 h-3" />
-                  Clear
+                  {t('common.clear')}
                 </button>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -185,14 +187,14 @@ export function SearchPage() {
 
           {/* Suggested Queries */}
           <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-6 text-center">
-            Suggested Queries
+            {t('search.suggestedQueries')}
           </h3>
           <div className="flex flex-wrap justify-center gap-3">
             {[
-              "React components with drag and drop",
-              "Lightweight database for Edge workers",
-              "Templates for a personal blog",
-              "Best Python API frameworks"
+              t('suggestions.reactDragDrop'),
+              t('suggestions.lightweightDb'),
+              t('suggestions.blogTemplates'),
+              t('suggestions.pythonApiFrameworks')
             ].map((suggestion) => (
               <button
                 key={suggestion}

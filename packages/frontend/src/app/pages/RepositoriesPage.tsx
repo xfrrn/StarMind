@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { Search, ChevronDown, Settings2, ArrowUpDown, Star } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { RepoCard } from '../components/RepoCard';
 import { Badge } from '../components/Badge';
 import { fetchRepositories, fetchStats, type RepoFilters, type StatsResponse } from '../api';
 import type { Repository } from '../data';
 
 export function RepositoriesPage() {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [repos, setRepos] = useState<Repository[]>([]);
@@ -83,9 +85,9 @@ export function RepositoriesPage() {
     <div className="flex flex-col h-full bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
       <div className="flex items-center justify-between px-8 py-6 border-b border-zinc-200 dark:border-zinc-800 flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Your Repositories</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('repositories.title')}</h1>
           <p className="text-zinc-500 dark:text-zinc-400 mt-1 text-sm">
-            Browse and filter through your {total.toLocaleString()} synced starred repositories.
+            {t('repositories.description', { count: total.toLocaleString() })}
           </p>
         </div>
         <div className="flex gap-3">
@@ -93,7 +95,7 @@ export function RepositoriesPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
               type="text"
-              placeholder="Search repositories..."
+              placeholder={t('repositories.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -109,9 +111,9 @@ export function RepositoriesPage() {
         {/* Filter Sidebar */}
         <div className="w-64 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-6 overflow-y-auto hidden lg:block bg-zinc-50/50 dark:bg-zinc-900/20">
           <div className="space-y-8">
-            <FilterSection title="Language">
+            <FilterSection title={t('repositories.language')}>
               <FilterCheckbox
-                label="All"
+                label={t('common.all')}
                 count={stats?.total || 0}
                 checked={selectedLanguage === ''}
                 onChange={() => { setSelectedLanguage(''); setPage(1); }}
@@ -127,9 +129,9 @@ export function RepositoriesPage() {
               ))}
             </FilterSection>
 
-            <FilterSection title="Category">
+            <FilterSection title={t('repositories.category')}>
               <FilterCheckbox
-                label="All"
+                label={t('common.all')}
                 count={stats?.total || 0}
                 checked={selectedCategory === ''}
                 onChange={() => { setSelectedCategory(''); setPage(1); }}
@@ -145,23 +147,23 @@ export function RepositoriesPage() {
               ))}
             </FilterSection>
 
-            <FilterSection title="Features">
+            <FilterSection title={t('repositories.features')}>
               <FilterCheckbox
-                label="Has UI"
+                label={t('repositories.hasUI')}
                 count={0}
                 checked={filterHasUI === true}
                 onChange={() => { setFilterHasUI(filterHasUI === true ? undefined : true); setPage(1); }}
               />
               <FilterCheckbox
-                label="Has API"
+                label={t('repositories.hasAPI')}
                 count={0}
                 checked={filterHasAPI === true}
                 onChange={() => { setFilterHasAPI(filterHasAPI === true ? undefined : true); setPage(1); }}
               />
             </FilterSection>
 
-            <FilterSection title="Activity Level">
-              {['High', 'Medium', 'Low'].map((level) => (
+            <FilterSection title={t('repositories.activityLevel')}>
+              {[t('repositories.high'), t('repositories.medium'), t('repositories.low')].map((level) => (
                 <FilterCheckbox
                   key={level}
                   label={level}
@@ -172,12 +174,12 @@ export function RepositoriesPage() {
               ))}
             </FilterSection>
 
-            <FilterSection title="Stars Range">
+            <FilterSection title={t('repositories.starsRange')}>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    placeholder="Min"
+                    placeholder={t('repositories.min')}
                     value={starsMin ?? ''}
                     onChange={(e) => {
                       const val = e.target.value ? parseInt(e.target.value) : undefined;
@@ -189,7 +191,7 @@ export function RepositoriesPage() {
                   <span className="text-xs text-zinc-400">-</span>
                   <input
                     type="number"
-                    placeholder="Max"
+                    placeholder={t('repositories.max')}
                     value={starsMax ?? ''}
                     onChange={(e) => {
                       const val = e.target.value ? parseInt(e.target.value) : undefined;
@@ -204,22 +206,22 @@ export function RepositoriesPage() {
                     onClick={() => { setStarsMin(undefined); setStarsMax(undefined); setPage(1); }}
                     className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                   >
-                    Clear
+                    {t('common.clear')}
                   </button>
                 )}
               </div>
             </FilterSection>
 
-            <FilterSection title="Sort By">
+            <FilterSection title={t('repositories.sortBy')}>
               <select
                 value={sortBy}
                 onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
                 className="w-full px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="stars">Stars (High to Low)</option>
-                <option value="stars_asc">Stars (Low to High)</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="updated">Recently Updated</option>
+                <option value="stars">{t('repositories.starsHighToLow')}</option>
+                <option value="stars_asc">{t('repositories.starsLowToHigh')}</option>
+                <option value="name">{t('repositories.nameAZ')}</option>
+                <option value="updated">{t('repositories.recentlyUpdated')}</option>
               </select>
             </FilterSection>
           </div>
@@ -233,8 +235,8 @@ export function RepositoriesPage() {
             </div>
           ) : repos.length === 0 ? (
             <div className="text-center py-20 text-zinc-500 dark:text-zinc-400">
-              <p className="text-lg mb-2">No repositories found</p>
-              <p className="text-sm">Try adjusting your filters or sync your starred repos first.</p>
+              <p className="text-lg mb-2">{t('repositories.noRepos')}</p>
+              <p className="text-sm">{t('repositories.noReposHint')}</p>
             </div>
           ) : (
             <>
@@ -250,17 +252,17 @@ export function RepositoriesPage() {
                     onClick={() => setPage(p => p - 1)}
                     className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm disabled:opacity-50"
                   >
-                    Previous
+                    {t('common.previous')}
                   </button>
                   <span className="px-4 py-2 text-sm text-zinc-500">
-                    Page {page} of {Math.ceil(total / 20)}
+                    {t('repositories.pageOf', { current: page, total: Math.ceil(total / 20) })}
                   </span>
                   <button
                     disabled={page >= Math.ceil(total / 20)}
                     onClick={() => setPage(p => p + 1)}
                     className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm disabled:opacity-50"
                   >
-                    Next
+                    {t('common.next')}
                   </button>
                 </div>
               )}

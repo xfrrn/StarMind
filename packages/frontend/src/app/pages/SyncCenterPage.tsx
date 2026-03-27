@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Github, CheckCircle2, Clock, AlertCircle, Bot, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { triggerSync, triggerAiAnalysis, getSyncStatus, type SyncStatusResponse } from '../api';
 
 export function SyncCenterPage() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -100,10 +102,10 @@ export function SyncCenterPage() {
     <div className="max-w-4xl mx-auto py-12 px-6">
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Sync Center
+          {t('sync.title')}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-lg">
-          Manage your GitHub connection and synchronization settings.
+          {t('sync.description')}
         </p>
       </div>
 
@@ -115,11 +117,11 @@ export function SyncCenterPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                GitHub Connected
+                {t('sync.githubConnected')}
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               </h2>
               <p className="text-zinc-500 dark:text-zinc-400">
-                Sync your starred repositories to search with AI.
+                {t('sync.syncDescription')}
               </p>
             </div>
           </div>
@@ -127,27 +129,27 @@ export function SyncCenterPage() {
 
         <div className="p-6 md:p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
           <div className="bg-zinc-50 dark:bg-zinc-950 rounded-xl p-5 border border-zinc-100 dark:border-zinc-800/50">
-            <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Stars</div>
+            <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-1">{t('sync.totalStars')}</div>
             <div className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
               {status?.total_stars?.toLocaleString() || 0}
             </div>
           </div>
           <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-5 border border-blue-100 dark:border-blue-900/30">
-            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Indexed Repos</div>
+            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">{t('sync.indexedRepos')}</div>
             <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
               {status?.indexed_repos?.toLocaleString() || 0}
             </div>
           </div>
           <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-5 border border-amber-100 dark:border-amber-900/30">
-            <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">Pending Analysis</div>
+            <div className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">{t('sync.pendingAnalysis')}</div>
             <div className="text-3xl font-bold text-amber-700 dark:text-amber-300">
               {status?.pending_repos?.toLocaleString() || 0}
             </div>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-5 border border-emerald-100 dark:border-emerald-900/30">
-            <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Last Sync</div>
+            <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">{t('sync.lastSync')}</div>
             <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
-              {status?.last_sync || 'Never'}
+              {status?.last_sync || t('sync.never')}
             </div>
           </div>
         </div>
@@ -159,12 +161,12 @@ export function SyncCenterPage() {
               <div className="flex items-center gap-3 mb-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Processing... {status.progress}/{status.total}
+                  {t('sync.processing')} {status.progress}/{status.total}
                 </span>
               </div>
               {status.current_repo && (
                 <p className="text-xs text-blue-600 dark:text-blue-400 ml-7">
-                  Current: {status.current_repo}
+                  {t('sync.current')}: {status.current_repo}
                 </p>
               )}
               {status.total > 0 && (
@@ -187,9 +189,9 @@ export function SyncCenterPage() {
 
         <div className="p-6 md:p-8 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-            <span><strong>Incremental:</strong> Update basic info (stars, description).</span>
-            <span><strong>Full:</strong> Reset AI analysis & re-process READMEs.</span>
-            <span><strong>Analyze:</strong> Run AI categorization for pending repos.</span>
+            <span><strong>{t('sync.incrementalSync')}:</strong> {t('sync.incrementalDesc')}</span>
+            <span><strong>{t('sync.fullSync')}:</strong> {t('sync.fullDesc')}</span>
+            <span><strong>{t('sync.runAiAnalysis')}:</strong> {t('sync.analyzeDesc')}</span>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
@@ -198,7 +200,7 @@ export function SyncCenterPage() {
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              Incremental Sync
+              {t('sync.incrementalSync')}
             </button>
             <button
               onClick={() => handleSync(true)}
@@ -206,7 +208,7 @@ export function SyncCenterPage() {
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50 border border-zinc-200 dark:border-zinc-700"
             >
               <Download className="w-4 h-4" />
-              Full Sync
+              {t('sync.fullSync')}
             </button>
             <button
               onClick={handleAiAnalysis}
@@ -214,17 +216,17 @@ export function SyncCenterPage() {
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl font-medium transition-colors shadow-sm disabled:opacity-50"
             >
               <Bot className={`w-4 h-4 ${syncing ? 'animate-pulse' : ''}`} />
-              Run AI Analysis
+              {t('sync.runAiAnalysis')}
             </button>
           </div>
         </div>
       </div>
 
-      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-4">Sync History</h3>
+      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-4">{t('sync.syncHistory')}</h3>
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
         {(!status?.logs || status.logs.length === 0) ? (
           <div className="p-6 text-center text-zinc-500 dark:text-zinc-400 text-sm">
-            No sync history yet. Click "Force Sync Now" to start your first sync.
+            {t('sync.noHistory')}
           </div>
         ) : (
           status.logs.map((log, i) => (

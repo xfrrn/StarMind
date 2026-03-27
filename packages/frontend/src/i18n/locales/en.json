@@ -1,0 +1,151 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "search": "Search",
+    "delete": "Delete",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "previous": "Previous",
+    "next": "Next",
+    "all": "All",
+    "notConfigured": "Not configured",
+    "connected": "Connected",
+    "notSet": "Not set",
+    "configured": "Configured"
+  },
+  "nav": {
+    "workspace": "Workspace",
+    "aiSearch": "AI Search",
+    "dashboard": "Dashboard",
+    "repositories": "Repositories",
+    "collections": "Collections",
+    "syncCenter": "Sync Center",
+    "settings": "Settings",
+    "githubProfile": "GitHub Profile"
+  },
+  "brand": {
+    "name": "StarMind"
+  },
+  "search": {
+    "title": "What are you looking for?",
+    "subtitle": "Ask questions to find the best projects from your starred repositories.",
+    "placeholder": "Find a Python project for building a RAG system...",
+    "ask": "Ask",
+    "aiSummary": "AI Summary",
+    "recommendedRepos": "Recommended Repositories",
+    "recentSearches": "Recent Searches",
+    "suggestedQueries": "Suggested Queries"
+  },
+  "suggestions": {
+    "reactDragDrop": "React components with drag and drop",
+    "lightweightDb": "Lightweight database for Edge workers",
+    "blogTemplates": "Templates for a personal blog",
+    "pythonApiFrameworks": "Best Python API frameworks"
+  },
+  "sync": {
+    "title": "Sync Center",
+    "description": "Manage your GitHub connection and synchronization settings.",
+    "githubConnected": "GitHub Connected",
+    "syncDescription": "Sync your starred repositories to search with AI.",
+    "totalStars": "Total Stars",
+    "indexedRepos": "Indexed Repos",
+    "pendingAnalysis": "Pending Analysis",
+    "lastSync": "Last Sync",
+    "never": "Never",
+    "processing": "Processing...",
+    "current": "Current",
+    "incrementalSync": "Incremental Sync",
+    "fullSync": "Full Sync",
+    "runAiAnalysis": "Run AI Analysis",
+    "syncHistory": "Sync History",
+    "noHistory": "No sync history yet. Click \"Incremental Sync\" to start your first sync.",
+    "incrementalDesc": "Update basic info (stars, description).",
+    "fullDesc": "Reset AI analysis & re-process READMEs.",
+    "analyzeDesc": "Run AI categorization for pending repos."
+  },
+  "repositories": {
+    "title": "Your Repositories",
+    "description": "Browse and filter through your {{count}} synced starred repositories.",
+    "searchPlaceholder": "Search repositories...",
+    "language": "Language",
+    "category": "Category",
+    "features": "Features",
+    "hasUI": "Has UI",
+    "hasAPI": "Has API",
+    "activityLevel": "Activity Level",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "starsRange": "Stars Range",
+    "min": "Min",
+    "max": "Max",
+    "sortBy": "Sort By",
+    "starsHighToLow": "Stars (High to Low)",
+    "starsLowToHigh": "Stars (Low to High)",
+    "nameAZ": "Name (A-Z)",
+    "recentlyUpdated": "Recently Updated",
+    "pageOf": "Page {{current}} of {{total}}",
+    "noRepos": "No repositories found",
+    "noReposHint": "Try adjusting your filters or sync your starred repos first."
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Manage your profile and API keys.",
+    "profile": "Profile",
+    "profileDescription": "Your personal information",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "githubUsername": "GitHub Username",
+    "apiKeys": "API Keys",
+    "apiKeysDescription": "Configure your API keys for external services",
+    "githubToken": "GitHub Token",
+    "githubTokenDescription": "Required for syncing your starred repositories",
+    "openaiKey": "OpenAI API Key",
+    "openaiKeyDescription": "Required for AI-powered search and analysis",
+    "getGithubPat": "Get GitHub PAT",
+    "getOpenaiKey": "Get OpenAI API Key",
+    "tokenSet": "Token is set",
+    "tokenNotSet": "Token not set",
+    "saved": "Settings saved successfully"
+  },
+  "collections": {
+    "title": "Collections",
+    "description": "Organize your repositories into collections for easy access.",
+    "createCollection": "Create Collection",
+    "noCollections": "No collections yet",
+    "noCollectionsHint": "Create your first collection to organize repositories."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview"
+  },
+  "header": {
+    "overview": "Overview",
+    "lastSynced": "Last synced: {{time}}",
+    "syncNow": "Sync Now",
+    "connectGithub": "Connect GitHub"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "mode": "{{mode}} Mode"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minAgo": "{{count}} min ago",
+    "hourAgo_one": "{{count}} hour ago",
+    "hourAgo_other": "{{count}} hours ago",
+    "dayAgo_one": "{{count}} day ago",
+    "dayAgo_other": "{{count}} days ago",
+    "never": "Never"
+  },
+  "language": {
+    "switch": "Language",
+    "en": "English",
+    "zh": "中文"
+  }
+}
