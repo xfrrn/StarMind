@@ -164,14 +164,15 @@ class AnalysisService:
         if self.runtime_state.get_sync_status()["is_syncing"]:
             raise RuntimeError("A sync or analysis is already in progress")
 
+        # Only select repos that truly need AI analysis:
+        # - analyze_status is NULL or empty (never analyzed)
+        # - analyze_status is "pending" or "failed" (needs analysis or retry)
         result = await db.execute(
             select(Repository).where(
                 or_(
-                    Repository.process_status.in_(["cleaned", "failed"]),
-                    Repository.analyze_status.in_(["pending", "failed", "running"]),
-                    Repository.repo_metadata_embedding.is_(None),
-                    Repository.readme_embedding.is_(None),
-                    Repository.embedding_version != self.settings.embedding_version,
+                    Repository.analyze_status.is_(None),
+                    Repository.analyze_status == "",
+                    Repository.analyze_status.in_(["pending", "failed"]),
                 )
             )
         )
