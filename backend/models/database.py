@@ -82,7 +82,12 @@ async def _ensure_repository_columns_and_embedding_dimension():
                 ADD COLUMN IF NOT EXISTS metadata_hash varchar(64) DEFAULT '',
                 ADD COLUMN IF NOT EXISTS readme_hash varchar(64) DEFAULT '',
                 ADD COLUMN IF NOT EXISTS embedding_version varchar(20) DEFAULT '',
-                ADD COLUMN IF NOT EXISTS embedding_updated_at timestamp
+                ADD COLUMN IF NOT EXISTS embedding_updated_at timestamp,
+                ADD COLUMN IF NOT EXISTS is_archived boolean DEFAULT false,
+                ADD COLUMN IF NOT EXISTS archive_path text DEFAULT '',
+                ADD COLUMN IF NOT EXISTS archive_size bigint DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS archive_sha varchar(64) DEFAULT '',
+                ADD COLUMN IF NOT EXISTS archived_at timestamp
                 """
             )
         )
@@ -103,6 +108,20 @@ async def _ensure_repository_columns_and_embedding_dimension():
                     error_detail text DEFAULT '',
                     attempt integer DEFAULT 1,
                     created_at timestamp NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS shared_archives (
+                    share_id varchar(12) PRIMARY KEY,
+                    repo_id integer NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                    expires_at timestamp NOT NULL,
+                    created_at timestamp NOT NULL DEFAULT now(),
+                    view_count integer DEFAULT 0,
+                    UNIQUE(repo_id)
                 )
                 """
             )

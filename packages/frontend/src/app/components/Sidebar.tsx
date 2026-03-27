@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router';
-import { Sparkles, Library, RefreshCw, Settings, Github, ChevronUp, ExternalLink, Moon, Sun, CheckCircle, XCircle, FolderOpen, BarChart3, Languages } from 'lucide-react';
+import { Sparkles, Library, RefreshCw, Settings, Github, ChevronUp, ExternalLink, Moon, Sun, CheckCircle, XCircle, FolderOpen, BarChart3, Languages, Archive } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../utils';
 import { useTheme, type Theme } from '../hooks/useTheme';
@@ -32,6 +32,7 @@ export function Sidebar() {
     { to: "/dashboard", icon: BarChart3, label: t('nav.dashboard'), end: true },
     { to: "/repositories", icon: Library, label: t('nav.repositories'), end: false },
     { to: "/collections", icon: FolderOpen, label: t('nav.collections'), end: true },
+    { to: "/archives", icon: Archive, label: t('nav.archives'), end: true },
     { to: "/sync", icon: RefreshCw, label: t('nav.syncCenter'), end: true },
     { to: "/settings", icon: Settings, label: t('nav.settings'), end: true },
   ];

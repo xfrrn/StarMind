@@ -27,6 +27,7 @@
     "dashboard": "仪表盘",
     "repositories": "仓库列表",
     "collections": "收藏集",
+    "archives": "留档仓库",
     "syncCenter": "同步中心",
     "settings": "设置",
     "githubProfile": "GitHub 主页"
@@ -226,6 +227,52 @@
     "noCollections": "暂无收藏集",
     "createCollection": "创建收藏集 →",
     "done": "完成",
-    "repoNotFound": "未找到仓库"
+    "repoNotFound": "未找到仓库",
+    "createArchive": "留档",
+    "archiving": "留档中...",
+    "downloadArchive": "下载留档",
+    "deleteArchive": "删除留档",
+    "deleteArchiveConfirm": "确定删除留档？文件将被永久删除。",
+    "archiveFailed": "留档失败，请重试。"
+  },
+  "archives": {
+    "title": "留档仓库",
+    "description": "已保存快照的仓库",
+    "repositories": "个仓库",
+    "noArchives": "暂无留档仓库",
+    "noArchivesHint": "在仓库详情页点击「留档」保存仓库快照",
+    "browseRepos": "浏览仓库",
+    "archivedAt": "留档于",
+    "download": "下载",
+    "delete": "删除",
+    "deleteConfirm": "确定删除「{{name}}」的留档？文件将被永久删除。",
+    "update": "更新留档",
+    "updateFailed": "更新留档失败",
+    "share": "分享",
+    "shareArchive": "分享留档",
+    "selectExpiration": "选择分享链接的过期时间",
+    "expiresIn": {
+      "1hour": "1 小时",
+      "24hours": "24 小时",
+      "7days": "7 天",
+      "30days": "30 天"
+    },
+    "expiresAt": "过期时间",
+    "createShare": "创建分享链接",
+    "creating": "创建中...",
+    "copy": "复制",
+    "copied": "已复制",
+    "deleteShare": "删除分享链接",
+    "deleteShareConfirm": "确定删除此分享链接？删除后链接将失效。",
+    "shareFailed": "创建分享链接失败"
+  },
+  "sharedArchive": {
+    "expired": "分享链接已过期",
+    "expiredDesc": "此分享链接已过期，无法访问。",
+    "notFound": "分享不存在",
+    "notFoundDesc": "此分享链接不存在或已被删除。",
+    "expires": "过期时间",
+    "viewCount": "浏览次数",
+    "download": "下载留档"
   }
 }

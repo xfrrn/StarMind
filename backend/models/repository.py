@@ -62,6 +62,13 @@ class Repository(Base):
     embedding_version = Column(String(20), default="")
     embedding_updated_at = Column(DateTime, default=None)
 
+    # Archive fields
+    is_archived = Column(Boolean, default=False)
+    archive_path = Column(Text, default="")
+    archive_size = Column(BigInteger, default=0)
+    archive_sha = Column(String(64), default="")
+    archived_at = Column(DateTime, default=None)
+
     # Relationship to collections
     collections = relationship(
         "Collection",

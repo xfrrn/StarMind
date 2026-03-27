@@ -749,3 +749,113 @@ export async function importBackup(file: File): Promise<ImportResponse> {
     }
     return resp.json();
 }
+
+
+// ---- Archives ----
+
+export interface ArchiveStatus {
+    is_archived: boolean;
+    archive_path: string;
+    archive_size: number;
+    archive_sha: string;
+    archived_at: string | null;
+}
+
+export interface ArchivedRepo {
+    id: number;
+    name: string;
+    description: string;
+    language: string;
+    stars: number;
+    archive_size: number;
+    archived_at: string | null;
+}
+
+export async function getArchiveStatus(repoId: string): Promise<ArchiveStatus> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`);
+    if (!resp.ok) throw new Error(`Fetch archive status failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function createArchive(repoId: string): Promise<ArchiveStatus> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`, {
+        method: 'POST',
+    });
+    if (!resp.ok) throw new Error(`Create archive failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteArchive(repoId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Delete archive failed: ${resp.statusText}`);
+}
+
+export function getArchiveDownloadUrl(repoId: string): string {
+    return `${API_BASE}/repositories/${repoId}/archive/download`;
+}
+
+export async function listArchives(): Promise<{ repositories: ArchivedRepo[]; total: number }> {
+    const resp = await fetch(`${API_BASE}/archives`);
+    if (!resp.ok) throw new Error(`Fetch archives failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+
+// ---- Archive Share ----
+
+export interface ArchiveShareStatus {
+    is_shared: boolean;
+    share_id: string | null;
+    share_url: string | null;
+    expires_at: string | null;
+    view_count: number;
+}
+
+export interface ArchiveShareCreate {
+    share_id: string;
+    share_url: string;
+    expires_at: string;
+}
+
+export interface SharedArchiveInfo {
+    repo_name: string;
+    repo_description: string;
+    archive_size: number;
+    expires_at: string;
+    view_count: number;
+}
+
+export async function getArchiveShareStatus(repoId: string): Promise<ArchiveShareStatus> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`);
+    if (!resp.ok) throw new Error(`Fetch share status failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function createArchiveShare(repoId: string, expiresInHours: number): Promise<ArchiveShareCreate> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expires_in_hours: expiresInHours }),
+    });
+    if (!resp.ok) throw new Error(`Create share failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function deleteArchiveShare(repoId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`, {
+        method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Delete share failed: ${resp.statusText}`);
+}
+
+export async function getSharedArchiveInfo(shareId: string): Promise<SharedArchiveInfo> {
+    const resp = await fetch(`${API_BASE}/public/archive/${shareId}`);
+    if (!resp.ok) throw new Error(`Fetch shared archive failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export function getSharedArchiveDownloadUrl(shareId: string): string {
+    return `${API_BASE}/public/archive/${shareId}/download`;
+}

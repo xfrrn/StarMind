@@ -10,8 +10,10 @@ const SyncCenterPage = lazy(() => import("./pages/SyncCenterPage").then(m => ({ 
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
 const CollectionsPage = lazy(() => import("./pages/CollectionsPage").then(m => ({ default: m.CollectionsPage })));
 const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage").then(m => ({ default: m.CollectionDetailPage })));
+const ArchivesPage = lazy(() => import("./pages/ArchivesPage").then(m => ({ default: m.ArchivesPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
 const PublicSharedPage = lazy(() => import("./pages/PublicSharedPage").then(m => ({ default: m.PublicSharedPage })));
+const SharedArchivePage = lazy(() => import("./pages/SharedArchivePage").then(m => ({ default: m.SharedArchivePage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -37,6 +39,10 @@ export const router = createBrowserRouter([
     element: <LazyPage Component={PublicSharedPage} />,
   },
   {
+    path: "/share/:shareId",
+    element: <LazyPage Component={SharedArchivePage} />,
+  },
+  {
     path: "/",
     Component: Layout,
     children: [
@@ -48,6 +54,7 @@ export const router = createBrowserRouter([
       { path: "settings", element: <LazyPage Component={SettingsPage} /> },
       { path: "collections", element: <LazyPage Component={CollectionsPage} /> },
       { path: "collections/:id", element: <LazyPage Component={CollectionDetailPage} /> },
+      { path: "archives", element: <LazyPage Component={ArchivesPage} /> },
     ],
   },
 ]);

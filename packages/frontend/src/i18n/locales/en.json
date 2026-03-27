@@ -27,6 +27,7 @@
     "dashboard": "Dashboard",
     "repositories": "Repositories",
     "collections": "Collections",
+    "archives": "Archives",
     "syncCenter": "Sync Center",
     "settings": "Settings",
     "githubProfile": "GitHub Profile"
@@ -226,6 +227,52 @@
     "noCollections": "No collections yet",
     "createCollection": "Create a collection →",
     "done": "Done",
-    "repoNotFound": "Repository not found"
+    "repoNotFound": "Repository not found",
+    "createArchive": "Archive",
+    "archiving": "Archiving...",
+    "downloadArchive": "Download Archive",
+    "deleteArchive": "Delete Archive",
+    "deleteArchiveConfirm": "Delete this archive? The file will be removed permanently.",
+    "archiveFailed": "Failed to create archive. Please try again."
+  },
+  "archives": {
+    "title": "Archived Repositories",
+    "description": "Repositories with saved snapshots",
+    "repositories": "repositories",
+    "noArchives": "No archived repositories",
+    "noArchivesHint": "Archive repositories from their detail page to save snapshots",
+    "browseRepos": "Browse repositories",
+    "archivedAt": "Archived",
+    "download": "Download",
+    "delete": "Delete",
+    "deleteConfirm": "Delete archive for \"{{name}}\"? The file will be permanently removed.",
+    "update": "Update archive",
+    "updateFailed": "Failed to update archive",
+    "share": "Share",
+    "shareArchive": "Share Archive",
+    "selectExpiration": "Select expiration time for the share link",
+    "expiresIn": {
+      "1hour": "1 hour",
+      "24hours": "24 hours",
+      "7days": "7 days",
+      "30days": "30 days"
+    },
+    "expiresAt": "Expires at",
+    "createShare": "Create Share Link",
+    "creating": "Creating...",
+    "copy": "Copy",
+    "copied": "Copied",
+    "deleteShare": "Delete share link",
+    "deleteShareConfirm": "Delete this share link? The link will no longer work.",
+    "shareFailed": "Failed to create share link"
+  },
+  "sharedArchive": {
+    "expired": "Share Link Expired",
+    "expiredDesc": "This share link has expired and is no longer available.",
+    "notFound": "Share Not Found",
+    "notFoundDesc": "This share link does not exist or has been deleted.",
+    "expires": "Expires",
+    "viewCount": "Views",
+    "download": "Download Archive"
   }
 }

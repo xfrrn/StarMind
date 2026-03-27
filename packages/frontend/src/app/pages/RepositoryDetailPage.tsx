@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder, StickyNote, Save, Pencil } from 'lucide-react';
+import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder, StickyNote, Save, Pencil, Archive, Download, Trash2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
-import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, getRepoNote, updateRepoNote, deleteRepoNote, type Collection } from '../api';
+import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, getRepoNote, updateRepoNote, deleteRepoNote, getArchiveStatus, createArchive, deleteArchive, getArchiveDownloadUrl, type Collection, type ArchiveStatus } from '../api';
 import { RepoChat } from '../components/RepoChat';
 import type { Repository } from '../data';
 
@@ -64,6 +64,10 @@ export function RepositoryDetailPage() {
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
 
+  // Archive state
+  const [archiveStatus, setArchiveStatus] = useState<ArchiveStatus | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+
   const autoFocusChat = searchParams.get('chat') === 'true';
 
   useEffect(() => {
@@ -95,6 +99,13 @@ export function RepositoryDetailPage() {
       .catch(console.error);
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+    getArchiveStatus(id)
+      .then(setArchiveStatus)
+      .catch(console.error);
+  }, [id]);
+
   const handleSaveNote = async () => {
     if (!id) return;
     setIsSavingNote(true);
@@ -118,6 +129,42 @@ export function RepositoryDetailPage() {
     } catch (err) {
       console.error('Failed to delete note:', err);
     }
+  };
+
+  const handleCreateArchive = async () => {
+    if (!id) return;
+    setIsArchiving(true);
+    try {
+      const status = await createArchive(id);
+      setArchiveStatus(status);
+    } catch (err) {
+      console.error('Failed to create archive:', err);
+      alert(t('repoDetail.archiveFailed'));
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleDeleteArchive = async () => {
+    if (!id) return;
+    if (!confirm(t('repoDetail.deleteArchiveConfirm'))) return;
+    try {
+      await deleteArchive(id);
+      setArchiveStatus({
+        is_archived: false,
+        archive_path: '',
+        archive_size: 0,
+        archive_sha: '',
+        archived_at: null,
+      });
+    } catch (err) {
+      console.error('Failed to delete archive:', err);
+    }
+  };
+
+  const handleDownloadArchive = () => {
+    if (!id) return;
+    window.open(getArchiveDownloadUrl(id), '_blank');
   };
 
   const handleAddToCollection = async (collectionId: string) => {
@@ -220,6 +267,37 @@ export function RepositoryDetailPage() {
             <FolderPlus className="w-4 h-4" />
             {t('repoDetail.addToCollection')}
           </button>
+          {archiveStatus?.is_archived ? (
+            <div className="flex flex-row gap-2">
+              <button
+                onClick={handleDownloadArchive}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl font-medium transition-colors border border-emerald-200 dark:border-emerald-800"
+              >
+                <Download className="w-4 h-4" />
+                {t('repoDetail.downloadArchive')}
+              </button>
+              <button
+                onClick={handleDeleteArchive}
+                className="flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-xl font-medium transition-colors border border-red-200 dark:border-red-800"
+                title={t('repoDetail.deleteArchive')}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleCreateArchive}
+              disabled={isArchiving}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors border border-zinc-200 dark:border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isArchiving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Archive className="w-4 h-4" />
+              )}
+              {isArchiving ? t('repoDetail.archiving') : t('repoDetail.createArchive')}
+            </button>
+          )}
         </div>
       </header>
 

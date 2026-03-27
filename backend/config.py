@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     port: int = 8000
     # CORS allowed origins (comma-separated, e.g., "http://localhost:5173,http://localhost:3000")
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    # Frontend base URL for generating share links (e.g., "http://localhost:5173" or "https://your-domain.com")
+    frontend_base_url: str = ""
 
     model_config = {
         "env_file": ".env",

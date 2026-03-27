@@ -51,8 +51,11 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:5173}
     ports:
       - "8000:8000"
+    volumes:
+      - archive_data:/app/data/archives
     depends_on:
       db:
         condition: service_healthy
@@ -70,3 +73,4 @@ services:
 
 volumes:
   pgdata:
+  archive_data:
