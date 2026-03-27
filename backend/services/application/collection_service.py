@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -194,6 +194,12 @@ class CollectionService:
         col = result.scalar_one_or_none()
         if not col:
             return False
+
+        # Delete associated share record first (if any)
+        from models.shared_collection import SharedCollection
+        await db.execute(
+            delete(SharedCollection).where(SharedCollection.collection_id == collection_id)
+        )
 
         await db.delete(col)
         await db.commit()
@@ -400,10 +406,10 @@ class CollectionService:
         )
         count = count_result.scalar() or 0
 
+        # Update the repo_count field in the collection
         await db.execute(
-            select(Collection).where(Collection.id == collection_id)
+            update(Collection).where(Collection.id == collection_id).values(repo_count=count)
         )
-        # The update happens via the refresh after commit
 
     def _collection_to_dict(self, col: Collection) -> dict[str, Any]:
         """Convert Collection model to dictionary."""

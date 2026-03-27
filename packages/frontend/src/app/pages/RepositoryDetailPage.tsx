@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Star, Activity, Github, FileText, FolderPlus, Check, X, Folder, StickyNote, Save, Pencil } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -28,6 +29,7 @@ function resolveReadmeUrl(url: string, repoUrl: string, isImage: boolean): strin
 }
 
 export function RepositoryDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const [repo, setRepo] = useState<Repository | null>(null);
@@ -90,7 +92,7 @@ export function RepositoryDetailPage() {
 
   const handleDeleteNote = async () => {
     if (!id) return;
-    if (!confirm('Delete this note?')) return;
+    if (!confirm(t('repoDetail.deleteNoteConfirm'))) return;
     try {
       await deleteRepoNote(id);
       setNote('');
@@ -134,8 +136,8 @@ export function RepositoryDetailPage() {
   if (error || !repo) {
     return (
       <div className="max-w-5xl mx-auto py-8 px-6 text-center">
-        <p className="text-red-500">{error || 'Repository not found'}</p>
-        <Link to="/repositories" className="text-blue-500 hover:underline mt-4 inline-block">← Back to repositories</Link>
+        <p className="text-red-500">{error || t('repoDetail.repoNotFound')}</p>
+        <Link to="/repositories" className="text-blue-500 hover:underline mt-4 inline-block">← {t('repoDetail.backToRepos')}</Link>
       </div>
     );
   }
@@ -150,7 +152,7 @@ export function RepositoryDetailPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400 font-medium">
-          <Link to="/repositories" className="hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors">Repositories</Link>
+          <Link to="/repositories" className="hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors">{t('repoDetail.repos')}</Link>
           <span>/</span>
           <span className="text-zinc-900 dark:text-zinc-50">{repo.name}</span>
         </div>
@@ -174,11 +176,11 @@ export function RepositoryDetailPage() {
             <div className="flex items-center gap-2">
               <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
               <span className="font-semibold text-zinc-900 dark:text-zinc-50">{(repo.stars / 1000).toFixed(1)}k</span>
-              <span>stars</span>
+              <span>{t('repoDetail.stars')}</span>
             </div>
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-500" />
-              <span>Updated {repo.lastUpdated}</span>
+              <span>{t('repoDetail.updated')} {repo.lastUpdated}</span>
             </div>
           </div>
         </div>
@@ -191,14 +193,14 @@ export function RepositoryDetailPage() {
             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl font-medium transition-colors shadow-sm"
           >
             <Github className="w-4 h-4" />
-            View on GitHub
+            {t('repoDetail.viewOnGithub')}
           </a>
           <button
             onClick={() => setShowCollectionModal(true)}
             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl font-medium transition-colors border border-zinc-200 dark:border-zinc-700"
           >
             <FolderPlus className="w-4 h-4" />
-            Add to Collection
+            {t('repoDetail.addToCollection')}
           </button>
         </div>
       </header>
@@ -215,11 +217,11 @@ export function RepositoryDetailPage() {
                 <SparklesIcon className="w-4 h-4" />
               </div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                AI Project Summary
+                {t('repoDetail.aiProjectSummary')}
               </h2>
             </div>
             <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed relative z-10 text-base md:text-lg">
-              {repo.aiReason || "No AI summary available yet. Trigger a sync to generate one."}
+              {repo.aiReason || t('repoDetail.noAiSummary')}
             </p>
           </section>
 
@@ -232,7 +234,7 @@ export function RepositoryDetailPage() {
           <section className="bg-zinc-50/50 dark:bg-zinc-900/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
             <div className="flex items-center gap-2 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50">
               <FileText className="w-4 h-4 text-zinc-500" />
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">README.md</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{t('repoDetail.readme')}</h3>
             </div>
             <div className="p-6 md:p-8">
               <div className="markdown-body github-readme-body">
@@ -245,7 +247,7 @@ export function RepositoryDetailPage() {
                     {repo.readme}
                   </ReactMarkdown>
                 ) : (
-                  <p className="text-zinc-500 dark:text-zinc-400 italic">No README available.</p>
+                  <p className="text-zinc-500 dark:text-zinc-400 italic">{t('repoDetail.noReadme')}</p>
                 )}
               </div>
             </div>
@@ -258,7 +260,7 @@ export function RepositoryDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">
-                Personal Note
+                {t('repoDetail.personalNote')}
               </h3>
               {!isEditingNote && (
                 <button
@@ -274,7 +276,7 @@ export function RepositoryDetailPage() {
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Add your personal notes about this repository..."
+                  placeholder={t('repoDetail.notePlaceholder')}
                   rows={4}
                   className="w-full px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
@@ -285,27 +287,27 @@ export function RepositoryDetailPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                   >
                     <Save className="w-3 h-3" />
-                    {isSavingNote ? 'Saving...' : 'Save'}
+                    {isSavingNote ? t('repoDetail.saving') : t('repoDetail.save')}
                   </button>
                   <button
                     onClick={() => { setIsEditingNote(false); getRepoNote(id!).then(d => setNote(d.note)); }}
                     className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                   >
-                    Cancel
+                    {t('repoDetail.cancel')}
                   </button>
                   {note && (
                     <button
                       onClick={handleDeleteNote}
                       className="px-3 py-1.5 text-xs text-red-500 hover:text-red-600"
                     >
-                      Delete
+                      {t('repoDetail.delete')}
                     </button>
                   )}
                 </div>
               </div>
             ) : (
               <div className={`text-sm ${note ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-400 dark:text-zinc-500 italic'}`}>
-                {note || 'No personal note yet. Click edit to add one.'}
+                {note || t('repoDetail.noPersonalNote')}
               </div>
             )}
           </section>
@@ -314,7 +316,7 @@ export function RepositoryDetailPage() {
           {repoCollections.length > 0 && (
             <section>
               <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
-                Collections
+                {t('repoDetail.collections')}
               </h3>
               <div className="space-y-2">
                 {repoCollections.map(collection => (
@@ -338,24 +340,24 @@ export function RepositoryDetailPage() {
 
           <section>
             <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
-              Technology Stack
+              {t('repoDetail.technologyStack')}
             </h3>
             <div className="flex flex-wrap gap-2">
               <Badge className="px-3 py-1 text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 border-none">
                 {repo.language}
               </Badge>
               {repo.hasUI && (
-                <Badge variant="outline" className="px-3 py-1 text-sm">Frontend UI</Badge>
+                <Badge variant="outline" className="px-3 py-1 text-sm">{t('repoDetail.frontendUI')}</Badge>
               )}
               {repo.hasAPI && (
-                <Badge variant="outline" className="px-3 py-1 text-sm">REST API</Badge>
+                <Badge variant="outline" className="px-3 py-1 text-sm">{t('repoDetail.restApi')}</Badge>
               )}
             </div>
           </section>
 
           <section>
             <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
-              Tags & Categories
+              {t('repoDetail.tagsCategories')}
             </h3>
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary" className="px-3 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
@@ -371,12 +373,12 @@ export function RepositoryDetailPage() {
 
           <section>
             <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-4 uppercase tracking-wider">
-              About
+              {t('repoDetail.about')}
             </h3>
             <div className="space-y-4 text-sm text-zinc-600 dark:text-zinc-400">
               <div className="flex items-center gap-3">
                 <Activity className="w-4 h-4" />
-                <span>Activity: {repo.activityLevel}</span>
+                <span>{t('repoDetail.activity')}: {repo.activityLevel}</span>
               </div>
             </div>
           </section>
@@ -392,6 +394,7 @@ export function RepositoryDetailPage() {
           onAdd={handleAddToCollection}
           onRemove={handleRemoveFromCollection}
           onClose={() => setShowCollectionModal(false)}
+          t={t}
         />
       )}
     </div>
@@ -405,6 +408,7 @@ function AddToCollectionModal({
   onAdd,
   onRemove,
   onClose,
+  t,
 }: {
   repoName: string;
   allCollections: Collection[];
@@ -412,6 +416,7 @@ function AddToCollectionModal({
   onAdd: (collectionId: string) => void;
   onRemove: (collectionId: string) => void;
   onClose: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const isInCollection = (collectionId: string) => {
     return repoCollections.some(c => c.id === collectionId);
@@ -423,7 +428,7 @@ function AddToCollectionModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              Add to Collection
+              {t('repoDetail.addToCollection')}
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               {repoName}
@@ -441,13 +446,13 @@ function AddToCollectionModal({
           {allCollections.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-zinc-500 dark:text-zinc-400 mb-4">
-                No collections yet
+                {t('repoDetail.noCollections')}
               </p>
               <Link
                 to="/collections"
                 className="text-blue-500 hover:text-blue-600 text-sm font-medium"
               >
-                Create a collection →
+                {t('repoDetail.createCollection')}
               </Link>
             </div>
           ) : (
@@ -475,13 +480,13 @@ function AddToCollectionModal({
                         {collection.name}
                       </p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {collection.repo_count} repositories
+                        {t('repoDetail.repositories', { count: collection.repo_count })}
                       </p>
                     </div>
                     {added && (
                       <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
                         <Check className="w-4 h-4" />
-                        Added
+                        {t('repoDetail.added')}
                       </div>
                     )}
                   </button>
@@ -496,7 +501,7 @@ function AddToCollectionModal({
             onClick={onClose}
             className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors"
           >
-            Done
+            {t('repoDetail.done')}
           </button>
         </div>
       </div>

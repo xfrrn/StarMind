@@ -316,6 +316,7 @@ export function CollectionsPage() {
               collection={collection}
               onEdit={() => openEditModal(collection)}
               onDelete={() => handleDelete(collection.id, collection.name)}
+              t={t}
             />
           ))}
         </motion.div>
@@ -368,10 +369,12 @@ function CollectionCard({
   collection,
   onEdit,
   onDelete,
+  t,
 }: {
   collection: Collection;
   onEdit: () => void;
   onDelete: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -438,7 +441,7 @@ function CollectionCard({
         {/* Preview repos */}
         {'repositories' in collection && Array.isArray((collection as any).repositories) && (collection as any).repositories.length > 0 && (
           <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">Recently added:</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">{t('collections.recentlyAdded')}</p>
             <div className="space-y-1">
               {(collection as any).repositories.slice(0, 3).map((repo: any) => (
                 <span
