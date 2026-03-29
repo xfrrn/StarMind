@@ -99,7 +99,12 @@ export function CollectionDetailPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Overview state
+  // Overview expand/collapse state
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
+  const OVERVIEW_MAX_HEIGHT = 300; // pixels
+
+  // Check if overview is long (roughly estimate by character count)
+  const isOverviewLong = collection?.ai_introduction && collection.ai_introduction.length > 800;
   const [showOverviewEditModal, setShowOverviewEditModal] = useState(false);
   const [showAiGenerateModal, setShowAiGenerateModal] = useState(false);
   const [overviewContent, setOverviewContent] = useState('');
@@ -453,8 +458,26 @@ export function CollectionDetailPage() {
         </div>
         <div className="px-6 py-4">
           {collection.ai_introduction ? (
-            <div className="prose prose-zinc dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50 prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-li:text-zinc-600 dark:prose-li:text-zinc-400">
-              <ReactMarkdown>{collection.ai_introduction}</ReactMarkdown>
+            <div>
+              <div
+                className={cn(
+                  "prose prose-zinc dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50 prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-li:text-zinc-600 dark:prose-li:text-zinc-400 overflow-hidden transition-all duration-300",
+                  !overviewExpanded && isOverviewLong && "max-h-[300px] relative"
+                )}
+              >
+                <ReactMarkdown>{collection.ai_introduction}</ReactMarkdown>
+                {!overviewExpanded && isOverviewLong && (
+                  <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-zinc-900 to-transparent pointer-events-none" />
+                )}
+              </div>
+              {isOverviewLong && (
+                <button
+                  onClick={() => setOverviewExpanded(!overviewExpanded)}
+                  className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  {overviewExpanded ? '收起' : '展开全部'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-zinc-400 dark:text-zinc-500">
