@@ -457,18 +457,25 @@ export function CollectionDetailPage() {
             </button>
           </div>
         </div>
-        <div className="px-6 py-4">
+        <div className="px-8 py-6">
           {collection.ai_introduction ? (
             <div>
               <div
                 className={cn(
-                  "prose prose-zinc dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50 prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-li:text-zinc-600 dark:prose-li:text-zinc-400 overflow-hidden transition-all duration-300",
+                  "prose prose-zinc dark:prose-invert max-w-none",
+                  "prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50 prose-headings:mt-6 prose-headings:mb-3",
+                  "prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-p:leading-relaxed prose-p:my-3",
+                  "prose-li:text-zinc-600 dark:prose-li:text-zinc-400 prose-li:my-1",
+                  "prose-ul:my-3 prose-ol:my-3",
+                  "prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
+                  "prose-strong:text-zinc-900 dark:prose-strong:text-zinc-50",
+                  "overflow-hidden transition-all duration-300",
                   !overviewExpanded && isOverviewLong && "max-h-[300px] relative"
                 )}
               >
                 <ReactMarkdown>{collection.ai_introduction}</ReactMarkdown>
                 {!overviewExpanded && isOverviewLong && (
-                  <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-zinc-900 to-transparent pointer-events-none" />
+                  <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-zinc-900 via-white/80 dark:via-zinc-900/80 to-transparent pointer-events-none rounded-b-2xl" />
                 )}
               </div>
               {isOverviewLong && (
@@ -847,7 +854,7 @@ export function CollectionDetailPage() {
                       Generated Overview
                     </h3>
                     <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 max-h-80 overflow-y-auto">
-                      <div className="prose prose-zinc dark:prose-invert max-w-none prose-sm">
+                      <div className="prose prose-zinc dark:prose-invert max-w-none prose-sm prose-p:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
                         <ReactMarkdown>{generatedContent}</ReactMarkdown>
                       </div>
                     </div>
