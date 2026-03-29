@@ -258,4 +258,91 @@ async def _ensure_user_system_tables():
                 text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id)")
             )
 
+        # Create oauth_states table for OAuth CSRF protection
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_states (
+                    id serial PRIMARY KEY,
+                    state varchar(64) UNIQUE NOT NULL,
+                    expires_at timestamp NOT NULL,
+                    created_at timestamp DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_oauth_states_state ON oauth_states(state)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_oauth_states_expires_at ON oauth_states(expires_at)")
+        )
+
+        # Migrate existing data to a default user
+        await _migrate_to_default_user(conn)
+
         logger.info("User system tables verified/created")
+
+
+async def _migrate_to_default_user(conn):
+    """Migrate existing data (user_id=NULL) to a default user for backward compatibility."""
+    from config import get_settings
+    settings = get_settings()
+
+    # Check if default user already exists
+    result = await conn.execute(
+        text("SELECT id FROM users WHERE email = 'default@starmind.local'")
+    )
+    default_user = result.scalar_one_or_none()
+
+    if default_user is None:
+        # Check if there's any data to migrate
+        result = await conn.execute(text("SELECT COUNT(*) FROM repositories WHERE user_id IS NULL"))
+        repo_count = result.scalar() or 0
+
+        if repo_count > 0:
+            logger.info(f"Found {repo_count} repositories without user_id, creating default user for migration")
+
+            # Create default user
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO users (email, display_name, is_active)
+                    VALUES ('default@starmind.local', 'Default User (Migrated)', true)
+                    RETURNING id
+                    """
+                )
+            )
+            result = await conn.execute(
+                text("SELECT id FROM users WHERE email = 'default@starmind.local'")
+            )
+            default_user = result.scalar_one_or_none()
+
+            # Create user settings for default user
+            if default_user:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO user_settings (user_id, openai_api_key, openai_base_url, openai_model)
+                        VALUES (:user_id, :openai_key, :openai_url, :openai_model)
+                        """),
+                    {
+                        "user_id": default_user,
+                        "openai_key": settings.openai_api_key or "",
+                        "openai_url": settings.openai_base_url,
+                        "openai_model": settings.openai_model,
+                    }
+                )
+
+            logger.info(f"Created default user with id={default_user}")
+
+    # Migrate existing data to default user
+    if default_user:
+        tables_to_migrate = ["repositories", "conversations", "collections", "repo_notes", "sync_logs"]
+        for table in tables_to_migrate:
+            result = await conn.execute(
+                text(f"UPDATE {table} SET user_id = :user_id WHERE user_id IS NULL"),
+                {"user_id": default_user}
+            )
+            if result.rowcount > 0:
+                logger.info(f"Migrated {result.rowcount} rows in {table} to default user")

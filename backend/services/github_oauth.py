@@ -7,30 +7,54 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# State storage for OAuth flow (in production, use Redis or similar)
-_oauth_states: dict[str, float] = {}
 
-
-def generate_oauth_state() -> str:
-    """Generate a random state for OAuth CSRF protection."""
+async def generate_oauth_state(db: AsyncSession) -> str:
+    """Generate a random state for OAuth CSRF protection and store in database."""
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = datetime.datetime.utcnow().timestamp()
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
+
+    await db.execute(
+        text("INSERT INTO oauth_states (state, expires_at) VALUES (:state, :expires_at)"),
+        {"state": state, "expires_at": expires_at}
+    )
+    await db.commit()
+
     return state
 
 
-def validate_oauth_state(state: str, max_age_seconds: int = 600) -> bool:
+async def validate_oauth_state(db: AsyncSession, state: str) -> bool:
     """Validate OAuth state and remove it after use."""
-    if state not in _oauth_states:
+    # Delete expired states first
+    await db.execute(
+        text("DELETE FROM oauth_states WHERE expires_at < :now"),
+        {"now": datetime.datetime.utcnow()}
+    )
+
+    # Check if state exists and is valid
+    result = await db.execute(
+        text("SELECT id FROM oauth_states WHERE state = :state AND expires_at > :now"),
+        {"state": state, "now": datetime.datetime.utcnow()}
+    )
+    row = result.scalar_one_or_none()
+
+    if row is None:
         return False
 
-    created_at = _oauth_states.pop(state)
-    age = datetime.datetime.utcnow().timestamp() - created_at
-    return age < max_age_seconds
+    # Delete the used state
+    await db.execute(
+        text("DELETE FROM oauth_states WHERE id = :id"),
+        {"id": row}
+    )
+    await db.commit()
+
+    return True
 
 
 def get_github_oauth_url(state: str) -> str:

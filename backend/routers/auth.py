@@ -131,7 +131,9 @@ async def login(
 
 
 @router.get("/github")
-async def github_oauth_redirect():
+async def github_oauth_redirect(
+    db: AsyncSession = Depends(get_db),
+):
     """Redirect to GitHub OAuth authorization page."""
     settings = get_settings()
 
@@ -141,7 +143,7 @@ async def github_oauth_redirect():
             detail="GitHub OAuth is not configured"
         )
 
-    state = generate_oauth_state()
+    state = await generate_oauth_state(db)
     oauth_url = get_github_oauth_url(state)
 
     # Return the state and URL for frontend to handle redirect
@@ -155,7 +157,7 @@ async def github_oauth_callback(
 ):
     """Handle GitHub OAuth callback and create/login user."""
     # Validate state
-    if not validate_oauth_state(request.state):
+    if not await validate_oauth_state(db, request.state):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired OAuth state"
@@ -221,21 +223,40 @@ async def github_oauth_callback(
                 if avatar_url:
                     user.avatar_url = avatar_url
             else:
-                # Create new user
-                user = User(
-                    email=primary_email,
-                    github_id=github_id,
-                    github_token=github_token,
-                    github_username=github_username,
-                    display_name=display_name,
-                    avatar_url=avatar_url,
+                # Check for default migration user to claim
+                result = await db.execute(
+                    select(User).where(User.email == "default@starmind.local", User.github_id.is_(None))
                 )
-                db.add(user)
-                await db.flush()
+                default_user = result.scalar_one_or_none()
 
-                # Create default user settings
-                settings = UserSetting(user_id=user.id)
-                db.add(settings)
+                if default_user:
+                    # Claim the default user - migrate to this GitHub account
+                    logger.info(f"Migrating default user {default_user.id} to GitHub account {github_username}")
+                    default_user.email = primary_email
+                    default_user.github_id = github_id
+                    default_user.github_token = github_token
+                    default_user.github_username = github_username
+                    if display_name:
+                        default_user.display_name = display_name
+                    if avatar_url:
+                        default_user.avatar_url = avatar_url
+                    user = default_user
+                else:
+                    # Create new user
+                    user = User(
+                        email=primary_email,
+                        github_id=github_id,
+                        github_token=github_token,
+                        github_username=github_username,
+                        display_name=display_name,
+                        avatar_url=avatar_url,
+                    )
+                    db.add(user)
+                    await db.flush()
+
+                    # Create default user settings
+                    settings = UserSetting(user_id=user.id)
+                    db.add(settings)
 
         await db.commit()
         await db.refresh(user)

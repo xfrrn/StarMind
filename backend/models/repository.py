@@ -98,6 +98,9 @@ class SyncLog(Base):
     updated_repos = Column(Integer, default=0)
     details = Column(Text, default="")
 
+    # Relationship
+    user = relationship("User", back_populates="sync_logs")
+
 
 class Setting(Base):
     __tablename__ = "settings"

@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan — initialize database on startup."""
     logger.info("🚀 StarMind backend starting up...")
+
+    # Validate required configuration
+    from config import get_settings
+    settings = get_settings()
+    if not settings.jwt_secret_key:
+        raise RuntimeError("JWT_SECRET_KEY is required. Generate one with: openssl rand -hex 32")
+
     await init_db()
     logger.info("✅ Database initialized")
 

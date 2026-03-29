@@ -6,6 +6,7 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pytz import all_timezones
+from sqlalchemy import select
 
 from models.database import async_session
 from services.service_registry import get_sync_service, get_settings_service
@@ -81,13 +82,25 @@ class SchedulerService:
 
         try:
             async with async_session() as db:
-                # Get GitHub token
-                settings_service = get_settings_service()
-                github_token = await settings_service.get_github_token(db)
+                # Get the first user (default user or the only user)
+                from sqlalchemy import text
+                result = await db.execute(text("SELECT id FROM users WHERE github_token IS NOT NULL LIMIT 1"))
+                user_row = result.scalar_one_or_none()
 
-                if not github_token:
+                if not user_row:
+                    logger.warning("Auto-sync skipped: No user with GitHub token found")
+                    return
+
+                # Get GitHub token from user
+                from models.user import User
+                user_result = await db.execute(select(User).where(User.id == user_row))
+                user = user_result.scalar_one_or_none()
+
+                if not user or not user.github_token:
                     logger.warning("Auto-sync skipped: GitHub token not configured")
                     return
+
+                github_token = user.github_token
 
                 # Check if sync is already running
                 sync_service = get_sync_service()
@@ -97,7 +110,7 @@ class SchedulerService:
                     return
 
                 # Run incremental sync
-                await sync_service.run_sync(db, github_token, full_sync=False)
+                await sync_service.run_sync(db, github_token, full_sync=False, user_id=user_row)
                 logger.info("Auto-sync completed successfully")
 
         except Exception as e:
@@ -121,10 +134,18 @@ async def init_scheduler() -> None:
     scheduler = get_scheduler()
     scheduler.start()
 
-    # Load settings and schedule job
+    # Load settings for default user (id=1) and schedule job
     async with async_session() as db:
+        from sqlalchemy import text
+        result = await db.execute(text("SELECT id FROM users LIMIT 1"))
+        user_row = result.scalar_one_or_none()
+
+        if not user_row:
+            logger.info("No users found, skipping scheduler initialization")
+            return
+
         settings_service = get_settings_service()
-        settings = await settings_service.get_user_settings(db)
+        settings = await settings_service.get_user_settings(db, user_row)
 
         await scheduler.schedule_auto_sync(
             enabled=settings.get("auto_sync_enabled", False),
