@@ -1,10 +1,14 @@
 """Chat router - AI-powered semantic search endpoint."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
+from models.user import User
+from routers.deps import get_current_user
 from routers.schemas import ChatRequest, ChatResponse, RepoChatRequest, RepoChatResponse
 from routers.mappers.chat import to_repository_response
 from services.service_registry import get_chat_service, get_repo_chat_service
@@ -13,12 +17,17 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """AI-powered semantic search across starred repositories."""
     service = get_chat_service()
     payload = await service.chat(
         db,
         user_message=request.query,
+        user_id=current_user.id,
         session_id=request.session_id,
         history=[turn.model_dump() for turn in request.history],
     )
@@ -29,7 +38,11 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat_stream(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """AI-powered semantic search with streaming response via SSE."""
     service = get_chat_service()
 
@@ -37,6 +50,7 @@ async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         async for event in service.chat_stream(
             db,
             user_message=request.query,
+            user_id=current_user.id,
             session_id=request.session_id,
             history=[turn.model_dump() for turn in request.history],
         ):
@@ -57,6 +71,7 @@ async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 async def chat_repo(
     repo_id: int,
     request: RepoChatRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Chat about a specific repository.
@@ -64,6 +79,7 @@ async def chat_repo(
     Args:
         repo_id: Repository ID
         request: Chat request with message and optional history
+        current_user: Current authenticated user
         db: Database session
 
     Returns:
@@ -74,6 +90,7 @@ async def chat_repo(
         db,
         repo_id=repo_id,
         message=request.message,
+        user_id=current_user.id,
         history=[turn.model_dump() for turn in request.history],
     )
     return {

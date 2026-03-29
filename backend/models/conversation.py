@@ -24,16 +24,18 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(255), default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     message_count = Column(Integer, default=0)
     last_message = Column(Text, default="")
 
-    # Relationship
+    # Relationships
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
     )
+    user = relationship("User", back_populates="conversations")
 
     def __repr__(self) -> str:
         return f"<Conversation {self.id}>"

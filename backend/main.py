@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
-from routers import chat, conversations, repositories, sync, settings, collections, dashboard, public, backup, archives
+from routers import auth, chat, conversations, repositories, sync, settings, collections, dashboard, public, backup, archives
 from services.application.scheduler_service import init_scheduler, get_scheduler
 
 logging.basicConfig(
@@ -63,6 +63,7 @@ app.add_middleware(
 )
 
 # Register routers
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(conversations.router)
 app.include_router(repositories.router)

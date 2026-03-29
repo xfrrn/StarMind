@@ -9,6 +9,16 @@ class Settings(BaseSettings):
     github_sync_page_concurrency: int = 4
     github_readme_concurrency: int = 8
 
+    # GitHub OAuth
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    github_oauth_redirect_uri: str = ""  # e.g., http://localhost:5173/auth/callback
+
+    # JWT Authentication
+    jwt_secret_key: str = ""  # Must be set in .env
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+
     # OpenAI
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

@@ -22,18 +22,23 @@ class CollectionService:
     async def list_collections(
         self,
         db: AsyncSession,
+        user_id: int | None = None,
         include_repos: bool = False,
     ) -> list[dict[str, Any]]:
         """List all collections with optional repo info.
 
         Args:
             db: Database session
+            user_id: User ID to filter by
             include_repos: Whether to include repository details
 
         Returns:
             List of collection dictionaries
         """
-        query = select(Collection).order_by(Collection.updated_at.desc())
+        query = select(Collection)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        query = query.order_by(Collection.updated_at.desc())
         result = await db.execute(query)
         collections = result.scalars().all()
 
@@ -70,19 +75,22 @@ class CollectionService:
         self,
         db: AsyncSession,
         collection_id: int,
+        user_id: int | None = None,
     ) -> dict[str, Any] | None:
         """Get a single collection by ID.
 
         Args:
             db: Database session
             collection_id: Collection ID
+            user_id: User ID to filter by
 
         Returns:
             Collection dictionary or None
         """
-        result = await db.execute(
-            select(Collection).where(Collection.id == collection_id)
-        )
+        query = select(Collection).where(Collection.id == collection_id)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        result = await db.execute(query)
         col = result.scalar_one_or_none()
         if not col:
                 return None
@@ -92,7 +100,8 @@ class CollectionService:
     async def create_collection(
         self,
         db: AsyncSession,
-        name: str,
+        user_id: int | None = None,
+        name: str = "",
         description: str = "",
         tags: list[str] | None = None,
         color: str = "#3B82F6",
@@ -112,6 +121,7 @@ class CollectionService:
             Created collection dictionary
         """
         col = Collection(
+            user_id=user_id,
             name=name,
             description=description,
             tags=json.dumps(tags or []),
@@ -130,6 +140,7 @@ class CollectionService:
         self,
         db: AsyncSession,
         collection_id: int,
+        user_id: int | None = None,
         name: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
@@ -141,6 +152,7 @@ class CollectionService:
         Args:
             db: Database session
             collection_id: Collection ID
+            user_id: User ID to filter by
             name: New name
             description: New description
             tags: New tags
@@ -150,9 +162,10 @@ class CollectionService:
         Returns:
             Updated collection dictionary or None
         """
-        result = await db.execute(
-            select(Collection).where(Collection.id == collection_id)
-        )
+        query = select(Collection).where(Collection.id == collection_id)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        result = await db.execute(query)
         col = result.scalar_one_or_none()
         if not col:
             return None
@@ -178,19 +191,22 @@ class CollectionService:
         self,
         db: AsyncSession,
         collection_id: int,
+        user_id: int | None = None,
     ) -> bool:
         """Delete a collection.
 
         Args:
             db: Database session
             collection_id: Collection ID
+            user_id: User ID to filter by
 
         Returns:
             True if deleted, False if not found
         """
-        result = await db.execute(
-            select(Collection).where(Collection.id == collection_id)
-        )
+        query = select(Collection).where(Collection.id == collection_id)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        result = await db.execute(query)
         col = result.scalar_one_or_none()
         if not col:
             return False
@@ -212,6 +228,7 @@ class CollectionService:
         db: AsyncSession,
         collection_id: int,
         repo_id: int,
+        user_id: int | None = None,
         notes: str = "",
     ) -> bool:
         """Add a repository to a collection.
@@ -220,11 +237,23 @@ class CollectionService:
             db: Database session
             collection_id: Collection ID
             repo_id: Repository ID
+            user_id: User ID to verify ownership
             notes: Optional notes
 
         Returns:
-            True if added, False if already exists
+            True if added, False if already exists or not authorized
         """
+        # Verify collection ownership if user_id provided
+        if user_id is not None:
+            col_result = await db.execute(
+                select(Collection).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                )
+            )
+            if not col_result.scalar_one_or_none():
+                return False
+
         # Check if already exists
         existing = await db.execute(
             select(CollectionRepo).where(
@@ -255,6 +284,7 @@ class CollectionService:
         db: AsyncSession,
         collection_id: int,
         repo_id: int,
+        user_id: int | None = None,
     ) -> bool:
         """Remove a repository from a collection.
 
@@ -262,10 +292,22 @@ class CollectionService:
             db: Database session
             collection_id: Collection ID
             repo_id: Repository ID
+            user_id: User ID to verify ownership
 
         Returns:
-            True if removed, False if not found
+            True if removed, False if not found or not authorized
         """
+        # Verify collection ownership if user_id provided
+        if user_id is not None:
+            col_result = await db.execute(
+                select(Collection).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                )
+            )
+            if not col_result.scalar_one_or_none():
+                return False
+
         result = await db.execute(
             select(CollectionRepo).where(
                 CollectionRepo.collection_id == collection_id,
@@ -289,6 +331,7 @@ class CollectionService:
         self,
         db: AsyncSession,
         collection_id: int,
+        user_id: int | None = None,
         page: int = 1,
         limit: int = 20,
         filter_tags: list[str] | None = None,
@@ -298,6 +341,7 @@ class CollectionService:
         Args:
             db: Database session
             collection_id: Collection ID
+            user_id: User ID to verify ownership
             page: Page number
             limit: Items per page
             filter_tags: Optional list of tags to filter by
@@ -305,6 +349,17 @@ class CollectionService:
         Returns:
             Dictionary with repositories and pagination info
         """
+        # Verify collection ownership if user_id provided
+        if user_id is not None:
+            col_result = await db.execute(
+                select(Collection).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                )
+            )
+            if not col_result.scalar_one_or_none():
+                return {"repositories": [], "total": 0, "page": page, "limit": limit, "has_more": False}
+
         # Count total
         count_result = await db.execute(
             select(func.count())
@@ -368,12 +423,14 @@ class CollectionService:
         self,
         db: AsyncSession,
         repo_id: int,
+        user_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get all collections that contain a repository.
 
         Args:
             db: Database session
             repo_id: Repository ID
+            user_id: User ID to filter by
 
         Returns:
             List of collection dictionaries
@@ -382,8 +439,10 @@ class CollectionService:
             select(Collection)
             .join(CollectionRepo, Collection.id == CollectionRepo.collection_id)
             .where(CollectionRepo.repo_id == repo_id)
-            .order_by(Collection.name)
         )
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        query = query.order_by(Collection.name)
         result = await db.execute(query)
         collections = result.scalars().all()
 
@@ -392,16 +451,21 @@ class CollectionService:
     async def get_all_tags(
         self,
         db: AsyncSession,
+        user_id: int | None = None,
     ) -> list[str]:
         """Get all unique tags from all collections.
 
         Args:
             db: Database session
+            user_id: User ID to filter by
 
         Returns:
             List of unique tags
         """
-        result = await db.execute(select(Collection.tags))
+        query = select(Collection.tags)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        result = await db.execute(query)
         all_tags = set()
 
         for row in result.scalars().all():

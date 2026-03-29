@@ -17,6 +17,7 @@ class RepositoryService:
         self,
         db: AsyncSession,
         *,
+        user_id: int | None = None,
         page: int,
         limit: int,
         search: str | None,
@@ -30,6 +31,10 @@ class RepositoryService:
         sort_by: str | None = None,
     ) -> dict:
         query = select(Repository)
+
+        # Filter by user_id if provided
+        if user_id is not None:
+            query = query.where(Repository.user_id == user_id)
 
         if search:
             search_pattern = f"%{search}%"
@@ -91,8 +96,11 @@ class RepositoryService:
             "limit": limit,
         }
 
-    async def get_repository_by_id(self, db: AsyncSession, repo_id: int):
-        result = await db.execute(select(Repository).where(Repository.id == repo_id))
+    async def get_repository_by_id(self, db: AsyncSession, repo_id: int, user_id: int | None = None):
+        query = select(Repository).where(Repository.id == repo_id)
+        if user_id is not None:
+            query = query.where(Repository.user_id == user_id)
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
     async def backfill_truncated_readme_if_needed(self, db: AsyncSession, repo: Repository) -> None:
@@ -108,31 +116,39 @@ class RepositoryService:
             repo.readme = fresh_readme
             await db.commit()
 
-    async def get_repository_detail(self, db: AsyncSession, repo_id: int):
-        repo = await self.get_repository_by_id(db, repo_id)
+    async def get_repository_detail(self, db: AsyncSession, repo_id: int, user_id: int | None = None):
+        repo = await self.get_repository_by_id(db, repo_id, user_id)
         if not repo:
             return None
         await self.backfill_truncated_readme_if_needed(db, repo)
         return to_repo_out(repo)
 
-    async def get_repository_stats(self, db: AsyncSession) -> dict:
-        total_result = await db.execute(select(func.count(Repository.id)))
+    async def get_repository_stats(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        base_query = select(Repository)
+        if user_id is not None:
+            base_query = base_query.where(Repository.user_id == user_id)
+
+        total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
         total = total_result.scalar() or 0
 
-        lang_result = await db.execute(
+        lang_query = (
             select(Repository.language, func.count(Repository.id))
             .where(Repository.language != "")
-            .group_by(Repository.language)
-            .order_by(func.count(Repository.id).desc())
         )
+        if user_id is not None:
+            lang_query = lang_query.where(Repository.user_id == user_id)
+        lang_query = lang_query.group_by(Repository.language).order_by(func.count(Repository.id).desc())
+        lang_result = await db.execute(lang_query)
         languages = {row[0]: row[1] for row in lang_result.all()}
 
-        cat_result = await db.execute(
+        cat_query = (
             select(Repository.category, func.count(Repository.id))
             .where(Repository.category != "")
-            .group_by(Repository.category)
-            .order_by(func.count(Repository.id).desc())
         )
+        if user_id is not None:
+            cat_query = cat_query.where(Repository.user_id == user_id)
+        cat_query = cat_query.group_by(Repository.category).order_by(func.count(Repository.id).desc())
+        cat_result = await db.execute(cat_query)
         categories = {row[0]: row[1] for row in cat_result.all()}
 
         return {"total": total, "languages": languages, "categories": categories}

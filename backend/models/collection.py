@@ -12,6 +12,7 @@ class Collection(Base):
     __tablename__ = "collections"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, default="")
     tags = Column(Text, default="[]")  # JSON array of tags
@@ -22,12 +23,13 @@ class Collection(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-    # Relationship to repositories
+    # Relationships
     repositories = relationship(
         "Repository",
         secondary="collection_repos",
         back_populates="collections",
     )
+    user = relationship("User", back_populates="collections")
 
 
 class CollectionRepo(Base):

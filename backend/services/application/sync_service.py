@@ -35,13 +35,19 @@ class SyncService:
         self.readme_cleaner = readme_cleaner or ReadmeCleaner()
         self.state_transition_service = state_transition_service or StateTransitionService()
 
-    async def run_sync(self, db: AsyncSession, github_token: str, full_sync: bool = False) -> SyncLog:
+    async def run_sync(
+        self,
+        db: AsyncSession,
+        github_token: str,
+        user_id: int | None = None,
+        full_sync: bool = False,
+    ) -> SyncLog:
         if self.runtime_state.get_sync_status()["is_syncing"]:
             raise RuntimeError("A sync is already in progress")
 
         self.runtime_state.start_sync(total=0)
 
-        log = SyncLog(status="success", started_at=datetime.utcnow(), details="")
+        log = SyncLog(status="success", started_at=datetime.utcnow(), details="", user_id=user_id)
         new_count = 0
         updated_count = 0
         run_id = f"sync-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
@@ -74,9 +80,10 @@ class SyncService:
 
             # Batch load existing repositories to avoid N+1 queries
             github_ids = [repo_data["github_id"] for repo_data in starred_repos]
-            existing_result = await db.execute(
-                select(Repository).where(Repository.github_id.in_(github_ids))
-            )
+            query = select(Repository).where(Repository.github_id.in_(github_ids))
+            if user_id is not None:
+                query = query.where(Repository.user_id == user_id)
+            existing_result = await db.execute(query)
             existing_by_github_id = {r.github_id: r for r in existing_result.scalars().all()}
 
             for i, repo_data in enumerate(starred_repos):
@@ -178,6 +185,7 @@ class SyncService:
                         starred_at=starred_at,
                         synced_at=datetime.utcnow(),
                         embedding=None,
+                        user_id=user_id,
                     )
                     db.add(new_repo)
                     await db.flush()

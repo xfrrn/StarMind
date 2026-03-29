@@ -10,6 +10,95 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : '/api';
 
+// Token storage key
+const TOKEN_KEY = 'starmind_token';
+
+// Get stored token
+function getStoredToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+}
+
+// Set stored token
+export function setStoredToken(token: string): void {
+    localStorage.setItem(TOKEN_KEY, token);
+}
+
+// Clear stored token
+export function clearStoredToken(): void {
+    localStorage.removeItem(TOKEN_KEY);
+}
+
+// ---- Auth Types ----
+
+export interface User {
+    id: number;
+    email: string;
+    github_username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    has_github_token: boolean;
+}
+
+export interface LoginResponse {
+    access_token: string;
+    user: User;
+}
+
+// ---- Auth API ----
+
+export async function login(email: string, password: string): Promise<LoginResponse> {
+    const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+    });
+    if (!resp.ok) {
+        const error = await resp.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(error.detail || 'Login failed');
+    }
+    return resp.json();
+}
+
+export async function register(email: string, password: string): Promise<LoginResponse> {
+    const resp = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+    });
+    if (!resp.ok) {
+        const error = await resp.json().catch(() => ({ detail: 'Registration failed' }));
+        throw new Error(error.detail || 'Registration failed');
+    }
+    return resp.json();
+}
+
+export async function getCurrentUser(): Promise<User> {
+    const token = getStoredToken();
+    const headers: HeadersInit = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const resp = await fetch(`${API_BASE}/auth/me`, { headers });
+    if (!resp.ok) {
+        throw new Error('Failed to get current user');
+    }
+    return resp.json();
+}
+
+export async function loginWithGithub(code: string, state: string): Promise<LoginResponse> {
+    const resp = await fetch(`${API_BASE}/auth/github/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, state }),
+    });
+    if (!resp.ok) {
+        const error = await resp.json().catch(() => ({ detail: 'GitHub login failed' }));
+        throw new Error(error.detail || 'GitHub login failed');
+    }
+    return resp.json();
+}
+
 // Cache configuration
 const MAX_CACHE_SIZE = 100;
 const inflightGetRequests = new Map<string, Promise<unknown>>();
@@ -65,7 +154,19 @@ async function fetchJsonGet<T>(url: string, cacheTtlMs = 0): Promise<T> {
     }
 
     const request = (async () => {
-        const resp = await fetch(url);
+        // Add auth header
+        const token = getStoredToken();
+        const headers: HeadersInit = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const resp = await fetch(url, { headers });
+        if (resp.status === 401) {
+            clearStoredToken();
+            window.location.href = '/login';
+            throw new Error('Unauthorized');
+        }
         if (!resp.ok) {
             throw new Error(`Request failed: ${resp.status} ${resp.statusText}`);
         }

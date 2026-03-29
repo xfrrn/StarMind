@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router";
 import { lazy, Suspense } from "react";
 import { Layout } from "./components/Layout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // Lazy load page components for code splitting
 const SearchPage = lazy(() => import("./pages/SearchPage").then(m => ({ default: m.SearchPage })));
@@ -14,6 +15,9 @@ const ArchivesPage = lazy(() => import("./pages/ArchivesPage").then(m => ({ defa
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
 const PublicSharedPage = lazy(() => import("./pages/PublicSharedPage").then(m => ({ default: m.PublicSharedPage })));
 const SharedArchivePage = lazy(() => import("./pages/SharedArchivePage").then(m => ({ default: m.SharedArchivePage })));
+const LoginPage = lazy(() => import("./pages/LoginPage").then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import("./pages/RegisterPage").then(m => ({ default: m.RegisterPage })));
+const OAuthCallbackPage = lazy(() => import("./pages/OAuthCallbackPage").then(m => ({ default: m.OAuthCallbackPage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -43,8 +47,24 @@ export const router = createBrowserRouter([
     element: <LazyPage Component={SharedArchivePage} />,
   },
   {
+    path: "/login",
+    element: <LazyPage Component={LoginPage} />,
+  },
+  {
+    path: "/register",
+    element: <LazyPage Component={RegisterPage} />,
+  },
+  {
+    path: "/auth/callback",
+    element: <LazyPage Component={OAuthCallbackPage} />,
+  },
+  {
     path: "/",
-    Component: Layout,
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <LazyPage Component={SearchPage} /> },
       { path: "dashboard", element: <LazyPage Component={DashboardPage} /> },
