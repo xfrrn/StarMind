@@ -35,6 +35,7 @@ import {
   type CollectionRepo,
 } from '../api';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { cn } from '../utils';
 
 const PRESET_COLORS = [
   '#3B82F6',
