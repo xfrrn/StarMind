@@ -514,15 +514,15 @@ class CollectionService:
             repos.append({
                 "id": repo.id,
                 "name": repo.name,
-                "full_name": repo.full_name,
+                "full_name": repo.name,
                 "description": repo.description or "",
                 "language": repo.language or "",
                 "stars": repo.stars,
                 "tags": repo.tags or [],
                 "repo_tags": repo_tags,
                 "category": repo.category or "",
-                "ai_reason": repo.ai_reason or "",
-                "summary": repo.summary or "",
+                "ai_reason": "",
+                "summary": repo.ai_summary or "",
                 "notes": notes or "",
             })
 
