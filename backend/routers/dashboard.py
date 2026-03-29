@@ -1,5 +1,7 @@
 """Dashboard router - statistics and analytics endpoints."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,21 +9,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.database import get_db
 from models.repository import Repository
 from models.collection import Collection
+from models.user import User
+from routers.deps import get_current_user
 from routers.schemas.dashboard import DashboardResponse
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get comprehensive dashboard statistics."""
+    user_id = current_user.id
+
     # Total repositories
-    total_result = await db.execute(select(func.count(Repository.id)))
+    total_result = await db.execute(
+        select(func.count(Repository.id)).where(Repository.user_id == user_id)
+    )
     total_repos = total_result.scalar() or 0
 
     # Language distribution
     lang_result = await db.execute(
         select(Repository.language, func.count(Repository.id))
+        .where(Repository.user_id == user_id)
         .where(Repository.language != "")
         .group_by(Repository.language)
         .order_by(func.count(Repository.id).desc())
@@ -32,6 +44,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     # Category distribution
     cat_result = await db.execute(
         select(Repository.category, func.count(Repository.id))
+        .where(Repository.user_id == user_id)
         .where(Repository.category != "")
         .group_by(Repository.category)
         .order_by(func.count(Repository.id).desc())
@@ -41,6 +54,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     # Activity level distribution
     activity_result = await db.execute(
         select(Repository.activity_level, func.count(Repository.id))
+        .where(Repository.user_id == user_id)
         .where(Repository.activity_level != "")
         .group_by(Repository.activity_level)
     )

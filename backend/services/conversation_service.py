@@ -22,9 +22,10 @@ class ConversationService:
         self,
         db: AsyncSession,
         title: str = "",
+        user_id: int | None = None,
     ) -> Conversation:
         """Create a new conversation."""
-        conv = Conversation(title=title or "新对话")
+        conv = Conversation(title=title or "新对话", user_id=user_id)
         db.add(conv)
         await db.commit()
         await db.refresh(conv)
@@ -35,13 +36,17 @@ class ConversationService:
         self,
         db: AsyncSession,
         conversation_id: uuid.UUID,
+        user_id: int | None = None,
     ) -> Conversation | None:
         """Get a conversation by ID."""
-        result = await db.execute(
+        query = (
             select(Conversation)
             .options(selectinload(Conversation.messages))
             .where(Conversation.id == conversation_id)
         )
+        if user_id is not None:
+            query = query.where(Conversation.user_id == user_id)
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_conversations(
@@ -49,14 +54,14 @@ class ConversationService:
         db: AsyncSession,
         limit: int = 20,
         offset: int = 0,
+        user_id: int | None = None,
     ) -> list[Conversation]:
         """List conversations ordered by last updated."""
-        result = await db.execute(
-            select(Conversation)
-            .order_by(desc(Conversation.updated_at))
-            .limit(limit)
-            .offset(offset)
-        )
+        query = select(Conversation)
+        if user_id is not None:
+            query = query.where(Conversation.user_id == user_id)
+        query = query.order_by(desc(Conversation.updated_at)).limit(limit).offset(offset)
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def add_message(
@@ -112,9 +117,10 @@ class ConversationService:
         self,
         db: AsyncSession,
         conversation_id: uuid.UUID,
+        user_id: int | None = None,
     ) -> bool:
         """Delete a conversation and all its messages."""
-        conv = await self.get_conversation(db, conversation_id)
+        conv = await self.get_conversation(db, conversation_id, user_id=user_id)
         if not conv:
             return False
         await db.delete(conv)
@@ -122,9 +128,12 @@ class ConversationService:
         logger.info("Deleted conversation %s", conversation_id)
         return True
 
-    async def get_conversation_count(self, db: AsyncSession) -> int:
+    async def get_conversation_count(self, db: AsyncSession, user_id: int | None = None) -> int:
         """Get total conversation count."""
-        result = await db.execute(select(func.count(Conversation.id)))
+        query = select(func.count(Conversation.id))
+        if user_id is not None:
+            query = query.where(Conversation.user_id == user_id)
+        result = await db.execute(query)
         return result.scalar() or 0
 
     @staticmethod

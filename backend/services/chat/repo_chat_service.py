@@ -38,6 +38,7 @@ class RepoChatService:
         db: AsyncSession,
         repo_id: int,
         message: str,
+        user_id: int | None = None,
         history: list | None = None,
     ) -> RepoChatResponse:
         """Chat about a specific repository.
@@ -46,13 +47,14 @@ class RepoChatService:
             db: Database session
             repo_id: Repository ID
             message: User message
+            user_id: User ID for access control
             history: Conversation history
 
         Returns:
             RepoChatResponse with answer and repo info
         """
         # 1. Get repository
-        repo = await self._get_repo(db, repo_id)
+        repo = await self._get_repo(db, repo_id, user_id)
         if not repo:
             raise ValueError(f"Repository {repo_id} not found")
 
@@ -69,9 +71,12 @@ class RepoChatService:
             repo=repo,
         )
 
-    async def _get_repo(self, db: AsyncSession, repo_id: int) -> Repository | None:
-        """Fetch repository by ID."""
-        result = await db.execute(select(Repository).where(Repository.id == repo_id))
+    async def _get_repo(self, db: AsyncSession, repo_id: int, user_id: int | None = None) -> Repository | None:
+        """Fetch repository by ID, optionally filtering by user."""
+        query = select(Repository).where(Repository.id == repo_id)
+        if user_id is not None:
+            query = query.where(Repository.user_id == user_id)
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
     def _build_context(self, repo: Repository) -> str:

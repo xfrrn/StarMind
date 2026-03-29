@@ -1,5 +1,7 @@
 """Collections router - manage repository collections."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -7,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db
 from models.shared_collection import SharedCollection
+from models.user import User
+from routers.deps import get_current_user
 from routers.schemas import (
     CollectionCreate,
     CollectionUpdate,
@@ -41,39 +45,25 @@ def get_collection_service() -> CollectionService:
 
 @router.get("/collections", response_model=CollectionListResponse)
 async def list_collections(
-    include_repos: bool = False,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    include_repos: bool = False,
 ):
-    """List all collections.
-
-    Args:
-        include_repos: Whether to include first 10 repos in each collection
-        db: Database session
-
-    Returns:
-        List of collections
-    """
+    """List all collections for the current user."""
     service = get_collection_service()
-    collections = await service.list_collections(db, include_repos=include_repos)
+    collections = await service.list_collections(db, user_id=current_user.id, include_repos=include_repos)
     return {"collections": collections}
 
 
 @router.get("/collections/{collection_id}", response_model=CollectionResponse)
 async def get_collection(
     collection_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single collection by ID.
-
-    Args:
-        collection_id: Collection ID
-        db: Database session
-
-    Returns:
-        Collection details
-    """
+    """Get a single collection by ID."""
     service = get_collection_service()
-    collection = await service.get_collection(db, collection_id)
+    collection = await service.get_collection(db, collection_id, user_id=current_user.id)
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
     return collection
@@ -82,20 +72,14 @@ async def get_collection(
 @router.post("/collections", response_model=CollectionResponse, status_code=201)
 async def create_collection(
     data: CollectionCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new collection.
-
-    Args:
-        data: Collection data
-        db: Database session
-
-    Returns:
-        Created collection
-    """
+    """Create a new collection."""
     service = get_collection_service()
     collection = await service.create_collection(
         db,
+        user_id=current_user.id,
         name=data.name,
         description=data.description,
         tags=data.tags,
@@ -109,22 +93,15 @@ async def create_collection(
 async def update_collection(
     collection_id: int,
     data: CollectionUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a collection.
-
-    Args:
-        collection_id: Collection ID
-        data: Update data
-        db: Database session
-
-    Returns:
-        Updated collection
-    """
+    """Update a collection."""
     service = get_collection_service()
     collection = await service.update_collection(
         db,
         collection_id=collection_id,
+        user_id=current_user.id,
         name=data.name,
         description=data.description,
         tags=data.tags,
@@ -139,16 +116,12 @@ async def update_collection(
 @router.delete("/collections/{collection_id}", status_code=204)
 async def delete_collection(
     collection_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a collection.
-
-    Args:
-        collection_id: Collection ID
-        db: Database session
-    """
+    """Delete a collection."""
     service = get_collection_service()
-    success = await service.delete_collection(db, collection_id)
+    success = await service.delete_collection(db, collection_id, user_id=current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Collection not found")
 
@@ -157,19 +130,15 @@ async def delete_collection(
 async def add_repo_to_collection(
     collection_id: int,
     data: AddRepoToCollectionRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Add a repository to a collection.
-
-    Args:
-        collection_id: Collection ID
-        data: Request with repo_id and optional notes
-        db: Database session
-    """
+    """Add a repository to a collection."""
     service = get_collection_service()
     success = await service.add_repo_to_collection(
         db,
         collection_id=collection_id,
+        user_id=current_user.id,
         repo_id=data.repo_id,
         notes=data.notes,
     )
@@ -182,19 +151,15 @@ async def add_repo_to_collection(
 async def remove_repo_from_collection(
     collection_id: int,
     repo_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a repository from a collection.
-
-    Args:
-        collection_id: Collection ID
-        repo_id: Repository ID
-        db: Database session
-    """
+    """Remove a repository from a collection."""
     service = get_collection_service()
     success = await service.remove_repo_from_collection(
         db,
         collection_id=collection_id,
+        user_id=current_user.id,
         repo_id=repo_id,
     )
     if not success:
@@ -206,23 +171,15 @@ async def get_collection_repos(
     collection_id: int,
     page: int = 1,
     limit: int = 20,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get repositories in a collection with pagination.
-
-    Args:
-        collection_id: Collection ID
-        page: Page number
-        limit: Items per page
-        db: Database session
-
-    Returns:
-        Paginated list of repositories
-    """
+    """Get repositories in a collection with pagination."""
     service = get_collection_service()
     result = await service.get_collection_repos(
         db,
         collection_id=collection_id,
+        user_id=current_user.id,
         page=page,
         limit=limit,
     )
@@ -232,36 +189,23 @@ async def get_collection_repos(
 @router.get("/repositories/{repo_id}/collections", response_model=CollectionListResponse)
 async def get_repo_collections(
     repo_id: int,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all collections containing a repository.
-
-    Args:
-        repo_id: Repository ID
-        db: Database session
-
-    Returns:
-        List of collections
-    """
+    """Get all collections containing a repository."""
     service = get_collection_service()
-    collections = await service.get_repo_collections(db, repo_id=repo_id)
+    collections = await service.get_repo_collections(db, repo_id=repo_id, user_id=current_user.id)
     return {"collections": collections}
 
 
 @router.get("/collections/tags")
 async def get_all_tags(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all unique tags from collections.
-
-    Args:
-        db: Database session
-
-    Returns:
-        List of unique tags
-    """
+    """Get all unique tags from collections."""
     service = get_collection_service()
-    tags = await service.get_all_tags(db)
+    tags = await service.get_all_tags(db, user_id=current_user.id)
     return {"tags": tags}
 
 
