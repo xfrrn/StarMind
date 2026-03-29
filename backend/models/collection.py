@@ -18,6 +18,7 @@ class Collection(Base):
     color = Column(String(20), default="#3B82F6")  # Hex color for UI
     icon = Column(String(50), default="folder")  # Icon name
     repo_count = Column(Integer, default=0)
+    ai_introduction = Column(Text, default="")  # AI-generated or manual overview in Markdown
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -37,3 +38,4 @@ class CollectionRepo(Base):
     repo_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), primary_key=True)
     added_at = Column(DateTime, default=datetime.datetime.utcnow)
     notes = Column(Text, default="")  # Optional notes for this repo in this collection
+    tags = Column(Text, default="[]")  # JSON array of tags for this repo in this collection

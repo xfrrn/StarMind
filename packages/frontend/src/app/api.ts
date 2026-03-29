@@ -473,6 +473,7 @@ export interface Collection {
     color: string;
     icon: string;
     repo_count: number;
+    ai_introduction: string;
     created_at?: string;
     updated_at?: string;
 }
@@ -500,6 +501,7 @@ export interface CollectionRepo {
     language: string;
     stars: number;
     tags: string[];
+    repo_tags: string[];
     category: string;
     url: string;
     notes: string;
@@ -580,9 +582,11 @@ export async function removeRepoFromCollection(
 export async function getCollectionRepos(
     collectionId: string,
     page = 1,
-    limit = 20
+    limit = 20,
+    tags: string[] = []
 ): Promise<CollectionReposResponse> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos?page=${page}&limit=${limit}`);
+    const tagsParam = tags.length > 0 ? `&tags=${tags.join(",")}` : "";
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos?page=${page}&limit=${limit}${tagsParam}`);
     if (!resp.ok) throw new Error(`Fetch collection repos failed: ${resp.statusText}`);
     return resp.json();
 }
@@ -858,4 +862,43 @@ export async function getSharedArchiveInfo(shareId: string): Promise<SharedArchi
 
 export function getSharedArchiveDownloadUrl(shareId: string): string {
     return `${API_BASE}/public/archive/${shareId}/download`;
+}
+
+
+// ---- Collection Overview ----
+
+export async function updateCollectionOverview(collectionId: string, content: string): Promise<Collection> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/overview`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+    });
+    if (!resp.ok) throw new Error(`Update overview failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function generateCollectionOverview(collectionId: string, prompt: string = ""): Promise<{ content: string }> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/overview/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+    });
+    if (!resp.ok) throw new Error(`Generate overview failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function updateRepoTags(collectionId: string, repoId: string, tags: string[]): Promise<{ success: boolean }> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags }),
+    });
+    if (!resp.ok) throw new Error(`Update repo tags failed: ${resp.statusText}`);
+    return resp.json();
+}
+
+export async function getCollectionRepoTags(collectionId: string): Promise<{ tags: string[] }> {
+    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repo-tags`);
+    if (!resp.ok) throw new Error(`Fetch collection repo tags failed: ${resp.statusText}`);
+    return resp.json();
 }

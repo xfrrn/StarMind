@@ -291,6 +291,7 @@ class CollectionService:
         collection_id: int,
         page: int = 1,
         limit: int = 20,
+        filter_tags: list[str] | None = None,
     ) -> dict[str, Any]:
         """Get repositories in a collection with pagination.
 
@@ -299,6 +300,7 @@ class CollectionService:
             collection_id: Collection ID
             page: Page number
             limit: Items per page
+            filter_tags: Optional list of tags to filter by
 
         Returns:
             Dictionary with repositories and pagination info
@@ -314,7 +316,7 @@ class CollectionService:
         # Get repos with pagination
         offset = (page - 1) * limit
         query = (
-            select(Repository, CollectionRepo.notes)
+            select(Repository, CollectionRepo.notes, CollectionRepo.tags)
             .join(CollectionRepo, Repository.id == CollectionRepo.repo_id)
             .where(CollectionRepo.collection_id == collection_id)
             .order_by(CollectionRepo.added_at.desc())
@@ -325,7 +327,21 @@ class CollectionService:
         rows = result.all()
 
         repos = []
-        for repo, notes in rows:
+        for repo, notes, repo_tags_json in rows:
+            # Parse repo_tags from JSON
+            repo_tags = []
+            if repo_tags_json:
+                try:
+                    repo_tags = json.loads(repo_tags_json) if isinstance(repo_tags_json, str) else repo_tags_json
+                except (json.JSONDecodeError, TypeError):
+                    repo_tags = []
+
+            # Filter by tags if specified
+            if filter_tags:
+                # Check if any of the filter_tags are in repo_tags
+                if not any(tag in repo_tags for tag in filter_tags):
+                    continue
+
             repo_dict = {
                 "id": str(repo.id),
                 "name": repo.name,
@@ -333,6 +349,7 @@ class CollectionService:
                 "language": repo.language or "",
                 "stars": repo.stars,
                 "tags": repo.tags or [],
+                "repo_tags": repo_tags,
                 "category": repo.category or "",
                 "url": repo.url or "",
                 "notes": notes or "",
@@ -397,6 +414,149 @@ class CollectionService:
 
         return sorted(list(all_tags))
 
+    async def update_overview(
+        self,
+        db: AsyncSession,
+        collection_id: int,
+        content: str,
+    ) -> dict[str, Any] | None:
+        """Update the AI introduction/overview for a collection.
+
+        Args:
+            db: Database session
+            collection_id: Collection ID
+            content: New overview content (Markdown)
+
+        Returns:
+            Updated collection dictionary or None
+        """
+        result = await db.execute(
+            select(Collection).where(Collection.id == collection_id)
+        )
+        col = result.scalar_one_or_none()
+        if not col:
+            return None
+
+        col.ai_introduction = content
+        await db.commit()
+        await db.refresh(col)
+
+        logger.info(f"Updated overview for collection: {col.name}")
+        return self._collection_to_dict(col)
+
+    async def update_repo_tags(
+        self,
+        db: AsyncSession,
+        collection_id: int,
+        repo_id: int,
+        tags: list[str],
+    ) -> bool:
+        """Update tags for a repository in a collection.
+
+        Args:
+            db: Database session
+            collection_id: Collection ID
+            repo_id: Repository ID
+            tags: New list of tags
+
+        Returns:
+            True if updated, False if not found
+        """
+        result = await db.execute(
+            select(CollectionRepo).where(
+                CollectionRepo.collection_id == collection_id,
+                CollectionRepo.repo_id == repo_id,
+            )
+        )
+        col_repo = result.scalar_one_or_none()
+        if not col_repo:
+            return False
+
+        col_repo.tags = json.dumps(tags)
+        await db.commit()
+
+        logger.info(f"Updated tags for repo {repo_id} in collection {collection_id}")
+        return True
+
+    async def get_collection_repos_for_overview(
+        self,
+        db: AsyncSession,
+        collection_id: int,
+    ) -> list[dict[str, Any]]:
+        """Get all repositories in a collection for AI overview generation.
+
+        Args:
+            db: Database session
+            collection_id: Collection ID
+
+        Returns:
+            List of repository dictionaries with relevant info
+        """
+        query = (
+            select(Repository, CollectionRepo.notes, CollectionRepo.tags)
+            .join(CollectionRepo, Repository.id == CollectionRepo.repo_id)
+            .where(CollectionRepo.collection_id == collection_id)
+            .order_by(Repository.stars.desc())
+        )
+        result = await db.execute(query)
+        rows = result.all()
+
+        repos = []
+        for repo, notes, repo_tags_json in rows:
+            # Parse repo_tags from JSON
+            repo_tags = []
+            if repo_tags_json:
+                try:
+                    repo_tags = json.loads(repo_tags_json) if isinstance(repo_tags_json, str) else repo_tags_json
+                except (json.JSONDecodeError, TypeError):
+                    repo_tags = []
+
+            repos.append({
+                "id": repo.id,
+                "name": repo.name,
+                "full_name": repo.full_name,
+                "description": repo.description or "",
+                "language": repo.language or "",
+                "stars": repo.stars,
+                "tags": repo.tags or [],
+                "repo_tags": repo_tags,
+                "category": repo.category or "",
+                "ai_reason": repo.ai_reason or "",
+                "summary": repo.summary or "",
+                "notes": notes or "",
+            })
+
+        return repos
+
+    async def get_all_repo_tags_in_collection(
+        self,
+        db: AsyncSession,
+        collection_id: int,
+    ) -> list[str]:
+        """Get all unique repo tags from a collection.
+
+        Args:
+            db: Database session
+            collection_id: Collection ID
+
+        Returns:
+            List of unique tags
+        """
+        result = await db.execute(
+            select(CollectionRepo.tags).where(CollectionRepo.collection_id == collection_id)
+        )
+        all_tags = set()
+
+        for row in result.scalars().all():
+            try:
+                tags = json.loads(row) if isinstance(row, str) else row
+                if isinstance(tags, list):
+                    all_tags.update(tags)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        return sorted(list(all_tags))
+
     async def _update_repo_count(self, db: AsyncSession, collection_id: int) -> None:
         """Update the repo count for a collection."""
         count_result = await db.execute(
@@ -428,6 +588,7 @@ class CollectionService:
             "color": col.color or "#3B82F6",
             "icon": col.icon or "folder",
             "repo_count": col.repo_count or 0,
+            "ai_introduction": col.ai_introduction or "",
             "created_at": col.created_at.isoformat() if col.created_at else None,
             "updated_at": col.updated_at.isoformat() if col.updated_at else None,
         }

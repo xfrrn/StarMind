@@ -8,6 +8,10 @@ from .collection import (
     AddRepoToCollectionRequest,
     CollectionRepoResponse,
     CollectionReposResponse,
+    UpdateCollectionOverview,
+    UpdateRepoTagsRequest,
+    GenerateOverviewRequest,
+    GenerateOverviewResponse,
 )
 from .repositories import RepoListResponse, RepoOut, StatsResponse
 from .settings import SettingsResponse, SettingsUpdate, TestConnectionResponse
@@ -28,6 +32,10 @@ __all__ = [
     "AddRepoToCollectionRequest",
     "CollectionRepoResponse",
     "CollectionReposResponse",
+    "UpdateCollectionOverview",
+    "UpdateRepoTagsRequest",
+    "GenerateOverviewRequest",
+    "GenerateOverviewResponse",
     "RepoListResponse",
     "RepoOut",
     "SettingsResponse",

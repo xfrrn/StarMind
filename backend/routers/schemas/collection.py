@@ -39,6 +39,7 @@ class CollectionResponse(BaseModel):
     color: str
     icon: str
     repo_count: int
+    ai_introduction: str = ""
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -65,6 +66,7 @@ class CollectionRepoResponse(BaseModel):
     language: str
     stars: int
     tags: list[str]
+    repo_tags: list[str] = []  # Tags specific to this repo in this collection
     category: str
     url: str
     notes: str
@@ -78,3 +80,27 @@ class CollectionReposResponse(BaseModel):
     page: int
     limit: int
     has_more: bool
+
+
+class UpdateCollectionOverview(BaseModel):
+    """Schema for updating collection overview."""
+
+    content: str
+
+
+class UpdateRepoTagsRequest(BaseModel):
+    """Schema for updating repo tags in a collection."""
+
+    tags: list[str]
+
+
+class GenerateOverviewRequest(BaseModel):
+    """Schema for AI generating collection overview."""
+
+    prompt: str = ""
+
+
+class GenerateOverviewResponse(BaseModel):
+    """Schema for AI generated overview response."""
+
+    content: str

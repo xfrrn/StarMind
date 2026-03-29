@@ -12,8 +12,12 @@ import {
   Copy,
   Check,
   Link as LinkIcon,
+  Sparkles,
+  Tag as TagIcon,
+  Filter,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
 import {
   getCollection,
   getCollectionRepos,
@@ -23,6 +27,10 @@ import {
   getShareStatus,
   createShare,
   deleteShare,
+  updateCollectionOverview,
+  generateCollectionOverview,
+  updateRepoTags,
+  getCollectionRepoTags,
   type Collection,
   type CollectionRepo,
 } from '../api';
@@ -91,16 +99,30 @@ export function CollectionDetailPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Overview state
+  const [showOverviewEditModal, setShowOverviewEditModal] = useState(false);
+  const [showAiGenerateModal, setShowAiGenerateModal] = useState(false);
+  const [overviewContent, setOverviewContent] = useState('');
+  const [savingOverview, setSavingOverview] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState('');
+
+  // Tag filter state
+  const [allRepoTags, setAllRepoTags] = useState<string[]>([]);
+  const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
 
     Promise.all([
       getCollection(id),
-      getCollectionRepos(id, 1, 20),
-      getShareStatus(id)
+      getCollectionRepos(id, 1, 20, selectedFilterTags),
+      getShareStatus(id),
+      getCollectionRepoTags(id),
     ])
-      .then(([collectionData, reposData, shareData]) => {
+      .then(([collectionData, reposData, shareData, tagsData]) => {
         setCollection(collectionData);
         setRepos(reposData.repositories);
         setHasMore(reposData.has_more);
@@ -112,17 +134,33 @@ export function CollectionDetailPage() {
         setEditIcon(collectionData.icon || 'folder');
         // Initialize share status
         setShareStatus(shareData);
+        // Initialize overview
+        setOverviewContent(collectionData.ai_introduction || '');
+        // Initialize repo tags
+        setAllRepoTags(tagsData.tags);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Reload repos when filter tags change
+  useEffect(() => {
+    if (!id) return;
+    setPage(1);
+    getCollectionRepos(id, 1, 20, selectedFilterTags)
+      .then((data) => {
+        setRepos(data.repositories);
+        setHasMore(data.has_more);
+      })
+      .catch((err) => console.error('Failed to reload repos:', err));
+  }, [id, selectedFilterTags]);
 
   const loadMore = async () => {
     if (!id || loadingMore) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
-      const data = await getCollectionRepos(id, nextPage, 20);
+      const data = await getCollectionRepos(id, nextPage, 20, selectedFilterTags);
       setRepos(prev => [...prev, ...data.repositories]);
       setHasMore(data.has_more);
       setPage(nextPage);
@@ -209,6 +247,66 @@ export function CollectionDetailPage() {
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveOverview = async () => {
+    if (!collection) return;
+    setSavingOverview(true);
+    try {
+      const updated = await updateCollectionOverview(collection.id, overviewContent);
+      setCollection(updated);
+      setShowOverviewEditModal(false);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingOverview(false);
+    }
+  };
+
+  const handleGenerateOverview = async () => {
+    if (!collection) return;
+    setGenerating(true);
+    try {
+      const result = await generateCollectionOverview(collection.id, aiPrompt);
+      setGeneratedContent(result.content);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleAcceptGeneratedOverview = async () => {
+    if (!collection) return;
+    setSavingOverview(true);
+    try {
+      const updated = await updateCollectionOverview(collection.id, generatedContent);
+      setCollection(updated);
+      setOverviewContent(generatedContent);
+      setShowAiGenerateModal(false);
+      setAiPrompt('');
+      setGeneratedContent('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingOverview(false);
+    }
+  };
+
+  const handleUpdateRepoTags = async (repoId: string, newTags: string[]) => {
+    if (!collection) return;
+    try {
+      await updateRepoTags(collection.id, repoId, newTags);
+      // Update local state
+      setRepos(prev => prev.map(r =>
+        r.id === repoId ? { ...r, repo_tags: newTags } : r
+      ));
+      // Refresh all repo tags
+      const tagsData = await getCollectionRepoTags(collection.id);
+      setAllRepoTags(tagsData.tags);
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   if (loading) {
@@ -317,6 +415,97 @@ export function CollectionDetailPage() {
         )}
       </motion.div>
 
+      {/* Overview Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="mb-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-blue-500" />
+            Overview
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setAiPrompt('');
+                setGeneratedContent('');
+                setShowAiGenerateModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg font-medium transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              AI Generate
+            </button>
+            <button
+              onClick={() => {
+                setOverviewContent(collection.ai_introduction || '');
+                setShowOverviewEditModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg font-medium transition-colors"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit
+            </button>
+          </div>
+        </div>
+        <div className="px-6 py-4">
+          {collection.ai_introduction ? (
+            <div className="prose prose-zinc dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50 prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-li:text-zinc-600 dark:prose-li:text-zinc-400">
+              <ReactMarkdown>{collection.ai_introduction}</ReactMarkdown>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-zinc-400 dark:text-zinc-500">
+              <Sparkles className="w-10 h-10 mx-auto mb-3 opacity-50" />
+              <p>No overview yet. Use AI to generate one or write your own.</p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Tag Filter */}
+      {allRepoTags.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="mb-6 flex items-center gap-3"
+        >
+          <Filter className="w-4 h-4 text-zinc-400" />
+          <div className="flex flex-wrap gap-2">
+            {allRepoTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => {
+                  setSelectedFilterTags(prev =>
+                    prev.includes(tag)
+                      ? prev.filter(t => t !== tag)
+                      : [...prev, tag]
+                  );
+                }}
+                className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                  selectedFilterTags.includes(tag)
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+            {selectedFilterTags.length > 0 && (
+              <button
+                onClick={() => setSelectedFilterTags([])}
+                className="px-3 py-1 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* Repositories List */}
       {repos.length === 0 ? (
         <motion.div
@@ -328,18 +517,29 @@ export function CollectionDetailPage() {
             {renderIcon(collection.icon || 'folder', 'w-12 h-12')}
           </div>
           <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-50 mb-2">
-            No repositories yet
+            {selectedFilterTags.length > 0 ? 'No matching repositories' : 'No repositories yet'}
           </h3>
           <p className="text-zinc-500 dark:text-zinc-400 mb-6">
-            Add repositories from the repository detail page
+            {selectedFilterTags.length > 0
+              ? 'Try different tags or clear the filter'
+              : 'Add repositories from the repository detail page'}
           </p>
-          <Link
-            to="/repositories"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Browse Repositories
-          </Link>
+          {selectedFilterTags.length > 0 ? (
+            <button
+              onClick={() => setSelectedFilterTags([])}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
+            >
+              Clear Filter
+            </button>
+          ) : (
+            <Link
+              to="/repositories"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Browse Repositories
+            </Link>
+          )}
         </motion.div>
       ) : (
         <div className="space-y-4">
@@ -355,6 +555,7 @@ export function CollectionDetailPage() {
                 <RepoRow
                   repo={repo}
                   onRemove={() => handleRemoveRepo(repo.id, repo.name)}
+                  onUpdateTags={(tags) => handleUpdateRepoTags(repo.id, tags)}
                 />
               </motion.div>
             ))}
@@ -496,12 +697,198 @@ export function CollectionDetailPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Overview Edit Modal */}
+      <AnimatePresence>
+        {showOverviewEditModal && (
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => e.target === e.currentTarget && setShowOverviewEditModal(false)}
+          >
+            <motion.div
+              variants={modalContentVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  Edit Overview
+                </h2>
+                <button
+                  onClick={() => setShowOverviewEditModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6">
+                <textarea
+                  value={overviewContent}
+                  onChange={(e) => setOverviewContent(e.target.value)}
+                  placeholder="Write your overview in Markdown..."
+                  rows={12}
+                  className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowOverviewEditModal(false)}
+                  className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveOverview}
+                  disabled={savingOverview}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {savingOverview ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Generate Modal */}
+      <AnimatePresence>
+        {showAiGenerateModal && (
+          <motion.div
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => e.target === e.currentTarget && setShowAiGenerateModal(false)}
+          >
+            <motion.div
+              variants={modalContentVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-500" />
+                  AI Generate Overview
+                </h2>
+                <button
+                  onClick={() => setShowAiGenerateModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Prompt (optional)
+                  </label>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="e.g., Focus on the most useful tools for web development..."
+                    rows={2}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+                <button
+                  onClick={handleGenerateOverview}
+                  disabled={generating}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {generating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate
+                    </>
+                  )}
+                </button>
+
+                {generatedContent && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                      Generated Overview
+                    </h3>
+                    <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 max-h-80 overflow-y-auto">
+                      <div className="prose prose-zinc dark:prose-invert max-w-none prose-sm">
+                        <ReactMarkdown>{generatedContent}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {generatedContent && (
+                <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0">
+                  <button
+                    onClick={() => setGeneratedContent('')}
+                    className="px-4 py-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={handleAcceptGeneratedOverview}
+                    disabled={savingOverview}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed"
+                  >
+                    {savingOverview ? 'Saving...' : 'Accept & Save'}
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function RepoRow({ repo, onRemove }: { repo: CollectionRepo; onRemove: () => void }) {
+function RepoRow({
+  repo,
+  onRemove,
+  onUpdateTags
+}: {
+  repo: CollectionRepo;
+  onRemove: () => void;
+  onUpdateTags: (tags: string[]) => void;
+}) {
   const [showRemove, setShowRemove] = useState(false);
+  const [showTagEdit, setShowTagEdit] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+
+  const handleAddTag = () => {
+    const tag = tagInput.trim();
+    if (tag && !editingTags.includes(tag)) {
+      const newTags = [...editingTags, tag];
+      setEditingTags(newTags);
+      onUpdateTags(newTags);
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    const newTags = editingTags.filter(t => t !== tag);
+    setEditingTags(newTags);
+    onUpdateTags(newTags);
+  };
+
+  const startTagEdit = () => {
+    setEditingTags(repo.repo_tags || []);
+    setShowTagEdit(true);
+  };
 
   return (
     <div
@@ -535,6 +922,19 @@ function RepoRow({ repo, onRemove }: { repo: CollectionRepo; onRemove: () => voi
                 Note: {repo.notes}
               </p>
             )}
+            {/* Repo Tags */}
+            {(repo.repo_tags && repo.repo_tags.length > 0) && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {repo.repo_tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400 shrink-0">
             <div className="flex items-center gap-1">
@@ -546,23 +946,121 @@ function RepoRow({ repo, onRemove }: { repo: CollectionRepo; onRemove: () => voi
         </div>
       </Link>
 
-      {/* Remove button */}
+      {/* Action buttons */}
       <AnimatePresence>
         {showRemove && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.15 }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onRemove();
-            }}
-            className="absolute top-3 right-3 p-1.5 rounded-lg bg-red-50 dark:bg-red-950 text-red-500 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-3 right-3 flex items-center gap-1"
           >
-            <X className="w-4 h-4" />
-          </motion.button>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startTagEdit();
+              }}
+              className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              title="Edit tags"
+            >
+              <TagIcon className="w-4 h-4" />
+            </button>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRemove();
+              }}
+              className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950 text-red-500 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Tag Edit Modal */}
+      <AnimatePresence>
+        {showTagEdit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTagEdit(false);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  Edit Tags
+                </h2>
+                <button
+                  onClick={() => setShowTagEdit(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                    placeholder="Add a tag..."
+                    className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleAddTag}
+                    className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+                {editingTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {editingTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs rounded-full"
+                      >
+                        {tag}
+                        <button
+                          onClick={() => handleRemoveTag(tag)}
+                          className="hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
+                <button
+                  onClick={() => setShowTagEdit(false)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
