@@ -12,7 +12,7 @@ from models.user import User
 from routers.deps import get_current_user
 from routers.schemas import SettingsResponse, SettingsUpdate, TestConnectionResponse
 from services.service_registry import get_settings_service
-from services.application.scheduler_service import update_scheduler_job
+from services.application.scheduler_service import update_user_scheduler_job
 
 router = APIRouter(prefix="/api", tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -42,7 +42,8 @@ async def update_settings(
     if any(k in updates.model_dump(exclude_none=True) for k in
            ["auto_sync_enabled", "auto_sync_time", "timezone"]):
         try:
-            await update_scheduler_job(
+            await update_user_scheduler_job(
+                user_id=current_user.id,
                 enabled=result.get("auto_sync_enabled", False),
                 time_str=result.get("auto_sync_time", "00:00"),
                 timezone=result.get("timezone", "Asia/Shanghai"),

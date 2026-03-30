@@ -58,10 +58,12 @@ class ArchiveService:
         """Compute SHA256 hash of data."""
         return hashlib.sha256(data).hexdigest()
 
-    async def create_archive(self, db: AsyncSession, repo_id: int) -> dict:
+    async def create_archive(self, db: AsyncSession, repo_id: int, user_id: int) -> dict:
         """Create or update archive for a repository."""
-        # Get repository
-        result = await db.execute(select(Repository).where(Repository.id == repo_id))
+        # Get repository (ensure user owns it)
+        result = await db.execute(
+            select(Repository).where(Repository.id == repo_id, Repository.user_id == user_id)
+        )
         repo = result.scalar_one_or_none()
         if not repo:
             raise ValueError(f"Repository not found: {repo_id}")
@@ -99,9 +101,11 @@ class ArchiveService:
             "archived_at": repo.archived_at.isoformat() + "Z",
         }
 
-    async def get_archive_status(self, db: AsyncSession, repo_id: int) -> dict:
+    async def get_archive_status(self, db: AsyncSession, repo_id: int, user_id: int) -> dict:
         """Get archive status for a repository."""
-        result = await db.execute(select(Repository).where(Repository.id == repo_id))
+        result = await db.execute(
+            select(Repository).where(Repository.id == repo_id, Repository.user_id == user_id)
+        )
         repo = result.scalar_one_or_none()
         if not repo:
             raise ValueError(f"Repository not found: {repo_id}")
@@ -114,9 +118,11 @@ class ArchiveService:
             "archived_at": repo.archived_at.isoformat() + "Z" if repo.archived_at else None,
         }
 
-    async def delete_archive(self, db: AsyncSession, repo_id: int) -> None:
+    async def delete_archive(self, db: AsyncSession, repo_id: int, user_id: int) -> None:
         """Delete archive for a repository."""
-        result = await db.execute(select(Repository).where(Repository.id == repo_id))
+        result = await db.execute(
+            select(Repository).where(Repository.id == repo_id, Repository.user_id == user_id)
+        )
         repo = result.scalar_one_or_none()
         if not repo:
             raise ValueError(f"Repository not found: {repo_id}")
@@ -148,10 +154,13 @@ class ArchiveService:
             return archive_path
         return None
 
-    async def list_archived_repos(self, db: AsyncSession) -> list[dict]:
-        """List all archived repositories."""
+    async def list_archived_repos(self, db: AsyncSession, user_id: int) -> list[dict]:
+        """List all archived repositories for a user."""
         result = await db.execute(
-            select(Repository).where(Repository.is_archived == True)
+            select(Repository).where(
+                Repository.is_archived == True,
+                Repository.user_id == user_id
+            )
         )
         repos = result.scalars().all()
 

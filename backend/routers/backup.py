@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -11,16 +12,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.database import get_db
 from models.collection import Collection, CollectionRepo
 from models.repo_note import RepoNote
+from models.user import User
+from routers.deps import get_current_user
 
 
 router = APIRouter(prefix="/api", tags=["backup"])
 
 
 @router.get("/backup/export")
-async def export_data(db: AsyncSession = Depends(get_db)):
+async def export_data(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
     """Export all user data as JSON."""
-    # Export collections with repos
-    collections_result = await db.execute(select(Collection))
+    # Export collections with repos (user's own collections only)
+    collections_result = await db.execute(
+        select(Collection).where(Collection.user_id == current_user.id)
+    )
     collections = collections_result.scalars().all()
 
     collections_data = []
@@ -45,8 +53,10 @@ async def export_data(db: AsyncSession = Depends(get_db)):
             "repos": repos_data,
         })
 
-    # Export repo notes
-    notes_result = await db.execute(select(RepoNote))
+    # Export repo notes (user's own notes only)
+    notes_result = await db.execute(
+        select(RepoNote).where(RepoNote.user_id == current_user.id)
+    )
     notes = notes_result.scalars().all()
 
     notes_data = [
@@ -74,6 +84,7 @@ async def export_data(db: AsyncSession = Depends(get_db)):
 @router.post("/backup/import")
 async def import_data(
     file: UploadFile = File(...),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Import user data from JSON backup file."""
@@ -92,10 +103,11 @@ async def import_data(
 
     stats = {"collections": 0, "notes": 0, "repos_added": 0}
 
-    # Import collections
+    # Import collections (associate with current user)
     for col_data in data.get("collections", []):
-        # Create collection
+        # Create collection for current user
         collection = Collection(
+            user_id=current_user.id,
             name=col_data["name"],
             description=col_data.get("description", ""),
             tags=col_data.get("tags", "[]"),
@@ -117,10 +129,11 @@ async def import_data(
 
         stats["collections"] += 1
 
-    # Import repo notes
+    # Import repo notes (associate with current user)
     for note_data in data.get("repo_notes", []):
         note = RepoNote(
             repo_id=note_data["repo_id"],
+            user_id=current_user.id,
             note=note_data["note"],
         )
         db.add(note)

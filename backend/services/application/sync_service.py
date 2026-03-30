@@ -246,23 +246,38 @@ class SyncService:
         except Exception as e:
             logger.warning("Failed to update last_sync_at: %s", e)
 
-    async def run_ai_analysis(self, db: AsyncSession) -> dict:
-        return await self.analysis_service.run_pending_repository_analysis(db)
+    async def run_ai_analysis(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        return await self.analysis_service.run_pending_repository_analysis(db, user_id=user_id)
 
-    async def get_sync_status_overview(self, db: AsyncSession) -> dict:
+    async def get_sync_status_overview(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        """Get sync status overview for a specific user.
+
+        Args:
+            db: Database session
+            user_id: User ID to filter by
+
+        Returns:
+            Dictionary with sync status information
+        """
         status = self.runtime_state.get_sync_status()
 
-        total_result = await db.execute(select(func.count(Repository.id)))
+        # Base query filter for user
+        user_filter = (Repository.user_id == user_id,) if user_id is not None else ()
+
+        total_result = await db.execute(
+            select(func.count(Repository.id)).where(*user_filter)
+        )
         total_stars = total_result.scalar() or 0
 
         indexed_result = await db.execute(
             select(func.count(Repository.id)).where(
+                *user_filter,
                 or_(
                     Repository.embedding_status == "success",
                     Repository.repo_metadata_embedding.isnot(None),
                     Repository.readme_embedding.isnot(None),
                     Repository.embedding.isnot(None),
-                )
+                ),
             )
         )
         indexed_repos = indexed_result.scalar() or 0
@@ -271,40 +286,58 @@ class SyncService:
         # This means: pending, failed, running, or never analyzed (NULL/empty)
         pending_result = await db.execute(
             select(func.count(Repository.id)).where(
+                *user_filter,
                 or_(
                     Repository.analyze_status == None,
                     Repository.analyze_status == "",
                     Repository.analyze_status == "pending",
                     Repository.analyze_status == "failed",
                     Repository.analyze_status == "running",
-                )
+                ),
             )
         )
         pending_repos = pending_result.scalar() or 0
 
-        last_sync_result = await db.execute(
+        # Get last sync log for this user
+        last_sync_query = (
             select(SyncLog.finished_at)
             .where(SyncLog.status == "success")
             .order_by(SyncLog.finished_at.desc())
             .limit(1)
         )
+        if user_id is not None:
+            last_sync_query = last_sync_query.where(SyncLog.user_id == user_id)
+        last_sync_result = await db.execute(last_sync_query)
         last_sync = format_last_sync_time(last_sync_result.scalar())
 
-        logs_result = await db.execute(
-            select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
-        )
+        # Get sync logs for this user
+        logs_query = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
+        if user_id is not None:
+            logs_query = logs_query.where(SyncLog.user_id == user_id)
+        logs_result = await db.execute(logs_query)
         logs = logs_result.scalars().all()
         log_list = [to_sync_log_item(log.status, log.started_at, log.details or "") for log in logs]
 
-        process_rows = await db.execute(
-            select(Repository.process_status, func.count(Repository.id)).group_by(Repository.process_status)
+        # Get status breakdown for this user
+        process_query = (
+            select(Repository.process_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.process_status)
         )
-        analyze_rows = await db.execute(
-            select(Repository.analyze_status, func.count(Repository.id)).group_by(Repository.analyze_status)
+        analyze_query = (
+            select(Repository.analyze_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.analyze_status)
         )
-        embedding_rows = await db.execute(
-            select(Repository.embedding_status, func.count(Repository.id)).group_by(Repository.embedding_status)
+        embedding_query = (
+            select(Repository.embedding_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.embedding_status)
         )
+
+        process_rows = await db.execute(process_query)
+        analyze_rows = await db.execute(analyze_query)
+        embedding_rows = await db.execute(embedding_query)
         process_breakdown = {
             (row[0] or "unknown"): row[1]
             for row in process_rows.all()

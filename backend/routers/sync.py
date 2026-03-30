@@ -9,7 +9,7 @@ from models.database import async_session, get_db
 from models.user import User
 from routers.deps import get_current_user
 from routers.schemas import SyncStatusResponse, SyncTriggerResponse
-from services.service_registry import get_sync_service
+from services.service_registry import get_sync_service, get_settings_service
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -27,14 +27,16 @@ async def _run_analysis_background(user_id: int):
 @router.post("/sync", response_model=SyncTriggerResponse)
 async def trigger_sync(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
     full_sync: bool = Query(False, description="Force full sync instead of incremental"),
 ):
     """Trigger a sync of starred repositories."""
     service = get_sync_service()
+    settings_service = get_settings_service()
 
-    # Use user's GitHub token if available, otherwise fall back to system token
-    github_token = current_user.github_token or service.get_configured_github_token()
+    # Get decrypted GitHub token for user
+    github_token = await settings_service.get_github_token(db, user_id=current_user.id)
     if not github_token:
         return {"message": "No GitHub token configured.", "status": "error"}
 
@@ -54,7 +56,7 @@ async def trigger_sync(
 @router.post("/sync/analyze", response_model=SyncTriggerResponse)
 async def trigger_analysis(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     """Trigger AI analysis for pending repositories."""
     service = get_sync_service()

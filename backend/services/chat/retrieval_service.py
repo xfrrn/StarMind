@@ -79,17 +79,20 @@ class RetrievalService:
             matched_by=[matched_by],
         )
 
-    async def search_exact_repo(self, db: AsyncSession, parsed_query: RepoQuery, limit: int) -> list[RepoCandidate]:
+    async def search_exact_repo(self, db: AsyncSession, parsed_query: RepoQuery, limit: int, user_id: int | None = None) -> list[RepoCandidate]:
         if not (parsed_query.owner and parsed_query.repo_name):
             return []
         full_name = f"{parsed_query.owner}/{parsed_query.repo_name}"
         stmt = select(Repository).where(
             or_(Repository.name == full_name, Repository.name.ilike(f"%/{parsed_query.repo_name}"))
-        ).limit(limit)
+        )
+        if user_id is not None:
+            stmt = stmt.where(Repository.user_id == user_id)
+        stmt = stmt.limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [self._to_candidate(repo, matched_by="exact") for repo in rows]
 
-    async def search_by_metadata(self, db: AsyncSession, parsed_query: RepoQuery, limit: int) -> list[RepoCandidate]:
+    async def search_by_metadata(self, db: AsyncSession, parsed_query: RepoQuery, limit: int, user_id: int | None = None) -> list[RepoCandidate]:
         conditions = []
         if parsed_query.language:
             conditions.append(Repository.language == parsed_query.language)
@@ -101,11 +104,14 @@ class RetrievalService:
 
         if not conditions:
             return []
-        stmt = select(Repository).where(and_(*conditions)).order_by(Repository.stars.desc()).limit(limit)
+        stmt = select(Repository).where(and_(*conditions))
+        if user_id is not None:
+            stmt = stmt.where(Repository.user_id == user_id)
+        stmt = stmt.order_by(Repository.stars.desc()).limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [self._to_candidate(repo, matched_by="metadata") for repo in rows]
 
-    async def search_by_keywords(self, db: AsyncSession, parsed_query: RepoQuery, limit: int) -> list[RepoCandidate]:
+    async def search_by_keywords(self, db: AsyncSession, parsed_query: RepoQuery, limit: int, user_id: int | None = None) -> list[RepoCandidate]:
         terms = (parsed_query.keywords + parsed_query.capabilities)[:10]
         if not terms:
             return []
@@ -120,7 +126,10 @@ class RetrievalService:
                     Repository.readme_for_embedding.ilike(like),
                 )
             )
-        stmt = select(Repository).where(or_(*keyword_conditions)).order_by(Repository.stars.desc()).limit(limit)
+        stmt = select(Repository).where(or_(*keyword_conditions))
+        if user_id is not None:
+            stmt = stmt.where(Repository.user_id == user_id)
+        stmt = stmt.order_by(Repository.stars.desc()).limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [self._to_candidate(repo, matched_by="keyword") for repo in rows]
 
@@ -130,6 +139,7 @@ class RetrievalService:
         parsed_query: RepoQuery,
         rewrite_queries: list[str],
         limit: int,
+        user_id: int | None = None,
     ) -> list[RepoCandidate]:
         query_text = rewrite_queries[0] if rewrite_queries else parsed_query.raw_query
         if not query_text.strip():
@@ -159,17 +169,19 @@ class RetrievalService:
         sql = text(
             build_weighted_vector_search_sql(
                 extra_columns="topics, readme_for_embedding, homepage",
+                user_id=user_id,
             )
         )
-        rows = (await db.execute(
-            sql,
-            {
-                "query_embedding": str(query_embedding),
-                "metadata_weight": metadata_weight,
-                "readme_weight": readme_weight,
-                "limit": limit,
-            },
-        )).mappings().all()
+        params = {
+            "query_embedding": str(query_embedding),
+            "metadata_weight": metadata_weight,
+            "readme_weight": readme_weight,
+            "limit": limit,
+        }
+        if user_id is not None:
+            params["user_id"] = user_id
+
+        rows = (await db.execute(sql, params)).mappings().all()
 
         result: list[RepoCandidate] = []
         for row in rows:
@@ -227,19 +239,20 @@ class RetrievalService:
         parsed_query: RepoQuery,
         plan: RetrievalPlan,
         rewrite_queries: list[str],
+        user_id: int | None = None,
     ) -> tuple[list[RepoCandidate], list[str]]:
         groups: list[list[RepoCandidate]] = []
         used_paths: list[str] = []
         if plan.use_exact_lookup:
-            groups.append(await self.search_exact_repo(db, parsed_query, limit=plan.limit))
+            groups.append(await self.search_exact_repo(db, parsed_query, limit=plan.limit, user_id=user_id))
             used_paths.append("exact")
         if plan.use_metadata_filter:
-            groups.append(await self.search_by_metadata(db, parsed_query, limit=plan.limit))
+            groups.append(await self.search_by_metadata(db, parsed_query, limit=plan.limit, user_id=user_id))
             used_paths.append("metadata")
         if plan.use_keyword_search:
-            groups.append(await self.search_by_keywords(db, parsed_query, limit=plan.limit))
+            groups.append(await self.search_by_keywords(db, parsed_query, limit=plan.limit, user_id=user_id))
             used_paths.append("keyword")
         if plan.use_vector_search:
-            groups.append(await self.search_by_vector(db, parsed_query, rewrite_queries, limit=plan.limit))
+            groups.append(await self.search_by_vector(db, parsed_query, rewrite_queries, limit=plan.limit, user_id=user_id))
             used_paths.append("vector")
         return self._merge_candidates(groups, limit=plan.limit), used_paths

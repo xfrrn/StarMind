@@ -9,17 +9,17 @@ from pytz import all_timezones
 from sqlalchemy import select
 
 from models.database import async_session
+from models.user import User, UserSetting
 from services.service_registry import get_sync_service, get_settings_service
 
 logger = logging.getLogger(__name__)
 
 
 class SchedulerService:
-    """Manages scheduled tasks like auto-sync."""
+    """Manages scheduled tasks like auto-sync for multiple users."""
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
-        self._job_id = "auto_sync_job"
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -33,88 +33,97 @@ class SchedulerService:
             self.scheduler.shutdown()
             logger.info("Scheduler shutdown")
 
-    async def schedule_auto_sync(self, enabled: bool, time_str: str, timezone: str) -> None:
-        """Schedule or update the auto-sync job.
+    def _get_user_job_id(self, user_id: int) -> str:
+        """Get the job ID for a specific user."""
+        return f"auto_sync_user_{user_id}"
+
+    async def schedule_user_auto_sync(
+        self,
+        user_id: int,
+        enabled: bool,
+        time_str: str,
+        timezone: str,
+    ) -> None:
+        """Schedule or update the auto-sync job for a specific user.
 
         Args:
+            user_id: User ID
             enabled: Whether auto-sync is enabled
             time_str: Time in HH:MM format (e.g., "00:00")
             timezone: Timezone string (e.g., "Asia/Shanghai")
         """
+        job_id = self._get_user_job_id(user_id)
+
         # Remove existing job if any
-        if self.scheduler.get_job(self._job_id):
-            self.scheduler.remove_job(self._job_id)
-            logger.info("Removed existing auto-sync job")
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+            logger.info("Removed existing auto-sync job for user %s", user_id)
 
         if not enabled:
-            logger.info("Auto-sync is disabled")
+            logger.info("Auto-sync is disabled for user %s", user_id)
             return
 
         # Parse time string
         try:
             hour, minute = map(int, time_str.split(":"))
         except (ValueError, AttributeError):
-            logger.warning("Invalid time format: %s, using default 00:00", time_str)
+            logger.warning("Invalid time format: %s for user %s, using default 00:00", time_str, user_id)
             hour, minute = 0, 0
 
         # Validate timezone
         if timezone not in all_timezones:
-            logger.warning("Invalid timezone: %s, using UTC", timezone)
+            logger.warning("Invalid timezone: %s for user %s, using UTC", timezone, user_id)
             timezone = "UTC"
 
         # Create cron trigger
         trigger = CronTrigger(hour=hour, minute=minute, timezone=timezone)
 
-        # Add job
+        # Add job with user_id as argument
         self.scheduler.add_job(
-            self._run_auto_sync,
+            self._run_user_auto_sync,
             trigger,
-            id=self._job_id,
+            id=job_id,
+            args=[user_id],
             replace_existing=True,
             misfire_grace_time=3600,  # Allow 1 hour grace period for missed runs
         )
 
-        logger.info("Scheduled auto-sync at %s %s", time_str, timezone)
+        logger.info("Scheduled auto-sync for user %s at %s %s", user_id, time_str, timezone)
 
-    async def _run_auto_sync(self) -> None:
-        """Execute the auto-sync task."""
-        logger.info("Starting auto-sync...")
+    async def _run_user_auto_sync(self, user_id: int) -> None:
+        """Execute the auto-sync task for a specific user."""
+        logger.info("Starting auto-sync for user %s...", user_id)
 
         try:
             async with async_session() as db:
-                # Get the first user (default user or the only user)
-                from sqlalchemy import text
-                result = await db.execute(text("SELECT id FROM users WHERE github_token IS NOT NULL LIMIT 1"))
-                user_row = result.scalar_one_or_none()
+                # Get GitHub token for user (decrypted)
+                settings_service = get_settings_service()
+                github_token = await settings_service.get_github_token(db, user_id)
 
-                if not user_row:
-                    logger.warning("Auto-sync skipped: No user with GitHub token found")
+                if not github_token:
+                    logger.warning("Auto-sync skipped for user %s: GitHub token not configured", user_id)
                     return
-
-                # Get GitHub token from user
-                from models.user import User
-                user_result = await db.execute(select(User).where(User.id == user_row))
-                user = user_result.scalar_one_or_none()
-
-                if not user or not user.github_token:
-                    logger.warning("Auto-sync skipped: GitHub token not configured")
-                    return
-
-                github_token = user.github_token
 
                 # Check if sync is already running
                 sync_service = get_sync_service()
                 status = sync_service.runtime_state.get_sync_status()
                 if status["is_syncing"]:
-                    logger.info("Auto-sync skipped: sync already in progress")
+                    logger.info("Auto-sync skipped for user %s: sync already in progress", user_id)
                     return
 
                 # Run incremental sync
-                await sync_service.run_sync(db, github_token, full_sync=False, user_id=user_row)
-                logger.info("Auto-sync completed successfully")
+                await sync_service.run_sync(db, github_token, full_sync=False, user_id=user_id)
+                logger.info("Auto-sync completed successfully for user %s", user_id)
 
         except Exception as e:
-            logger.error("Auto-sync failed: %s", e, exc_info=True)
+            logger.error("Auto-sync failed for user %s: %s", user_id, e, exc_info=True)
+
+    def remove_user_job(self, user_id: int) -> None:
+        """Remove the auto-sync job for a specific user."""
+        job_id = self._get_user_job_id(user_id)
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+            logger.info("Removed auto-sync job for user %s", user_id)
 
 
 # Global scheduler instance
@@ -130,31 +139,42 @@ def get_scheduler() -> SchedulerService:
 
 
 async def init_scheduler() -> None:
-    """Initialize and start the scheduler with current settings."""
+    """Initialize and start the scheduler with settings for all users."""
     scheduler = get_scheduler()
     scheduler.start()
 
-    # Load settings for default user (id=1) and schedule job
+    # Load settings for all users with auto_sync_enabled
     async with async_session() as db:
-        from sqlalchemy import text
-        result = await db.execute(text("SELECT id FROM users LIMIT 1"))
-        user_row = result.scalar_one_or_none()
+        result = await db.execute(
+            select(User, UserSetting)
+            .join(UserSetting, User.id == UserSetting.user_id)
+            .where(User.github_token.isnot(None))
+            .where(UserSetting.auto_sync_enabled == True)
+        )
+        user_settings = result.all()
 
-        if not user_row:
-            logger.info("No users found, skipping scheduler initialization")
+        if not user_settings:
+            logger.info("No users with auto-sync enabled found")
             return
 
-        settings_service = get_settings_service()
-        settings = await settings_service.get_user_settings(db, user_row)
+        for user, settings in user_settings:
+            await scheduler.schedule_user_auto_sync(
+                user_id=user.id,
+                enabled=settings.auto_sync_enabled,
+                time_str=settings.auto_sync_time or "00:00",
+                timezone=settings.timezone or "Asia/Shanghai",
+            )
 
-        await scheduler.schedule_auto_sync(
-            enabled=settings.get("auto_sync_enabled", False),
-            time_str=settings.get("auto_sync_time", "00:00"),
-            timezone=settings.get("timezone", "Asia/Shanghai"),
-        )
+        logger.info("Initialized scheduler for %d users", len(user_settings))
 
 
-async def update_scheduler_job(enabled: bool, time_str: str, timezone: str) -> None:
-    """Update the scheduler job with new settings."""
+async def update_user_scheduler_job(user_id: int, enabled: bool, time_str: str, timezone: str) -> None:
+    """Update the scheduler job for a specific user."""
     scheduler = get_scheduler()
-    await scheduler.schedule_auto_sync(enabled, time_str, timezone)
+    await scheduler.schedule_user_auto_sync(user_id, enabled, time_str, timezone)
+
+
+async def remove_user_scheduler_job(user_id: int) -> None:
+    """Remove the scheduler job for a specific user."""
+    scheduler = get_scheduler()
+    scheduler.remove_user_job(user_id)

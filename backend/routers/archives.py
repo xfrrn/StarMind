@@ -1,7 +1,7 @@
 """Archive router - manage repository snapshots."""
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from models.database import get_db
 from models.shared_archive import SharedArchive, generate_share_id
+from models.user import User
+from routers.deps import get_current_user
 from services.application.archive_service import ArchiveService
 
 router = APIRouter(prefix="/api", tags=["archives"])
@@ -36,12 +38,13 @@ class ShareStatus(BaseModel):
 @router.post("/repositories/{repo_id}/archive")
 async def create_archive(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
     """Create or update archive for a repository."""
     try:
-        result = await service.create_archive(db, repo_id)
+        result = await service.create_archive(db, repo_id, user_id=current_user.id)
         return {"message": "Archive created successfully", **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -52,12 +55,13 @@ async def create_archive(
 @router.get("/repositories/{repo_id}/archive")
 async def get_archive_status(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
     """Get archive status for a repository."""
     try:
-        return await service.get_archive_status(db, repo_id)
+        return await service.get_archive_status(db, repo_id, user_id=current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -65,12 +69,13 @@ async def get_archive_status(
 @router.delete("/repositories/{repo_id}/archive")
 async def delete_archive(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
     """Delete archive for a repository."""
     try:
-        await service.delete_archive(db, repo_id)
+        await service.delete_archive(db, repo_id, user_id=current_user.id)
         return {"message": "Archive deleted successfully"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -79,12 +84,13 @@ async def delete_archive(
 @router.get("/repositories/{repo_id}/archive/download")
 async def download_archive(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
     """Download archive file for a repository."""
-    # Check if archived
-    status = await service.get_archive_status(db, repo_id)
+    # Check if archived and user owns it
+    status = await service.get_archive_status(db, repo_id, user_id=current_user.id)
     if not status["is_archived"]:
         raise HTTPException(status_code=404, detail="Archive not found")
 
@@ -102,11 +108,12 @@ async def download_archive(
 
 @router.get("/archives")
 async def list_archives(
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
-    """List all archived repositories."""
-    repos = await service.list_archived_repos(db)
+    """List all archived repositories for the current user."""
+    repos = await service.list_archived_repos(db, user_id=current_user.id)
     return {"repositories": repos, "total": len(repos)}
 
 
@@ -116,12 +123,13 @@ async def list_archives(
 async def create_share(
     repo_id: int,
     data: ShareCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     service: ArchiveService = Depends(get_archive_service),
 ):
     """Create or update share link for an archived repository."""
-    # Check if repo is archived
-    status = await service.get_archive_status(db, repo_id)
+    # Verify user owns this repository and it's archived
+    status = await service.get_archive_status(db, repo_id, user_id=current_user.id)
     if not status["is_archived"]:
         raise HTTPException(status_code=400, detail="Repository must be archived first")
 
@@ -158,9 +166,17 @@ async def create_share(
 @router.get("/repositories/{repo_id}/share", response_model=ShareStatus)
 async def get_share_status(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    service: ArchiveService = Depends(get_archive_service),
 ):
     """Get share status for a repository."""
+    # Verify user owns this repository
+    try:
+        await service.get_archive_status(db, repo_id, user_id=current_user.id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
     result = await db.execute(select(SharedArchive).where(SharedArchive.repo_id == repo_id))
     share = result.scalar_one_or_none()
 
@@ -186,9 +202,17 @@ async def get_share_status(
 @router.delete("/repositories/{repo_id}/share")
 async def delete_share(
     repo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    service: ArchiveService = Depends(get_archive_service),
 ):
     """Delete share link for a repository."""
+    # Verify user owns this repository
+    try:
+        await service.get_archive_status(db, repo_id, user_id=current_user.id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
     result = await db.execute(select(SharedArchive).where(SharedArchive.repo_id == repo_id))
     share = result.scalar_one_or_none()
 

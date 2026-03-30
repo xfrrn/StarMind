@@ -483,6 +483,7 @@ class CollectionService:
         db: AsyncSession,
         collection_id: int,
         content: str,
+        user_id: int | None = None,
     ) -> dict[str, Any] | None:
         """Update the AI introduction/overview for a collection.
 
@@ -490,13 +491,15 @@ class CollectionService:
             db: Database session
             collection_id: Collection ID
             content: New overview content (Markdown)
+            user_id: User ID to verify ownership
 
         Returns:
             Updated collection dictionary or None
         """
-        result = await db.execute(
-            select(Collection).where(Collection.id == collection_id)
-        )
+        query = select(Collection).where(Collection.id == collection_id)
+        if user_id is not None:
+            query = query.where(Collection.user_id == user_id)
+        result = await db.execute(query)
         col = result.scalar_one_or_none()
         if not col:
             return None
@@ -514,6 +517,7 @@ class CollectionService:
         collection_id: int,
         repo_id: int,
         tags: list[str],
+        user_id: int | None = None,
     ) -> bool:
         """Update tags for a repository in a collection.
 
@@ -522,10 +526,22 @@ class CollectionService:
             collection_id: Collection ID
             repo_id: Repository ID
             tags: New list of tags
+            user_id: User ID to verify ownership
 
         Returns:
-            True if updated, False if not found
+            True if updated, False if not found or not authorized
         """
+        # Verify collection ownership if user_id provided
+        if user_id is not None:
+            col_result = await db.execute(
+                select(Collection).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                )
+            )
+            if not col_result.scalar_one_or_none():
+                return False
+
         result = await db.execute(
             select(CollectionRepo).where(
                 CollectionRepo.collection_id == collection_id,
@@ -596,16 +612,29 @@ class CollectionService:
         self,
         db: AsyncSession,
         collection_id: int,
+        user_id: int | None = None,
     ) -> list[str]:
         """Get all unique repo tags from a collection.
 
         Args:
             db: Database session
             collection_id: Collection ID
+            user_id: User ID to verify ownership
 
         Returns:
             List of unique tags
         """
+        # Verify collection ownership if user_id provided
+        if user_id is not None:
+            col_result = await db.execute(
+                select(Collection).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                )
+            )
+            if not col_result.scalar_one_or_none():
+                return []
+
         result = await db.execute(
             select(CollectionRepo.tags).where(CollectionRepo.collection_id == collection_id)
         )

@@ -29,6 +29,7 @@ from services.github_oauth import (
     get_github_user_info,
     get_github_user_emails,
 )
+from utils.crypto import encrypt_value
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,7 @@ async def github_oauth_callback(
 
         if user:
             # Update existing user
-            user.github_token = github_token  # In production, encrypt this
+            user.github_token = encrypt_value(github_token)
             user.github_username = github_username
             if display_name:
                 user.display_name = display_name
@@ -216,7 +217,7 @@ async def github_oauth_callback(
             if user:
                 # Link GitHub to existing account
                 user.github_id = github_id
-                user.github_token = github_token
+                user.github_token = encrypt_value(github_token)
                 user.github_username = github_username
                 if display_name:
                     user.display_name = display_name
@@ -234,7 +235,7 @@ async def github_oauth_callback(
                     logger.info(f"Migrating default user {default_user.id} to GitHub account {github_username}")
                     default_user.email = primary_email
                     default_user.github_id = github_id
-                    default_user.github_token = github_token
+                    default_user.github_token = encrypt_value(github_token)
                     default_user.github_username = github_username
                     if display_name:
                         default_user.display_name = display_name
@@ -246,7 +247,7 @@ async def github_oauth_callback(
                     user = User(
                         email=primary_email,
                         github_id=github_id,
-                        github_token=github_token,
+                        github_token=encrypt_value(github_token),
                         github_username=github_username,
                         display_name=display_name,
                         avatar_url=avatar_url,
@@ -310,7 +311,8 @@ async def update_github_token(
     db: AsyncSession = Depends(get_db),
 ):
     """Update user's GitHub personal access token."""
-    current_user.github_token = request.github_token  # In production, encrypt this
+    # Encrypt the token before storing
+    current_user.github_token = encrypt_value(request.github_token)
 
     # Also update github_username if possible
     try:

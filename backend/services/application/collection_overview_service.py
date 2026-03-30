@@ -71,6 +71,7 @@ class CollectionOverviewService:
         db,
         collection_id: int,
         prompt: str = "",
+        user_id: int | None = None,
     ) -> str:
         """Generate an AI overview for a collection.
 
@@ -78,12 +79,13 @@ class CollectionOverviewService:
             db: Database session
             collection_id: Collection ID
             prompt: Optional user prompt to guide generation
+            user_id: User ID to verify ownership
 
         Returns:
             Generated Markdown content
         """
-        # Get collection info
-        collection = await self.collection_service.get_collection(db, collection_id)
+        # Get collection info (verify ownership if user_id provided)
+        collection = await self.collection_service.get_collection(db, collection_id, user_id=user_id)
         if not collection:
             raise ValueError(f"Collection {collection_id} not found")
 

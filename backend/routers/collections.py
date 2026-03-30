@@ -358,22 +358,17 @@ async def update_collection_overview(
 async def generate_collection_overview(
     collection_id: int,
     data: GenerateOverviewRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
     """Generate an AI overview for a collection."""
-    # Verify ownership
-    service = get_collection_service()
-    collection = await service.get_collection(db, collection_id, user_id=current_user.id)
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-
     overview_service = get_overview_service()
     try:
         content = await overview_service.generate_overview(
             db,
             collection_id=collection_id,
             prompt=data.prompt,
+            user_id=current_user.id,
         )
         return GenerateOverviewResponse(content=content)
     except ValueError as e:

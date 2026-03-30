@@ -66,6 +66,7 @@ class ChatService:
         self,
         db: AsyncSession,
         user_message: str,
+        user_id: int | None = None,
         session_id: str | None = None,
         history: list | None = None,
     ) -> ChatResponsePayload:
@@ -92,6 +93,7 @@ class ChatService:
                     parsed_query=parsed_query,
                     plan=plan,
                     rewrite_queries=rewrite_queries,
+                    user_id=user_id,
                 )
                 telemetry.used_paths = used_paths
                 telemetry.retrieval_count = len(candidates)
@@ -147,6 +149,7 @@ class ChatService:
         self,
         db: AsyncSession,
         user_message: str,
+        user_id: int | None = None,
         session_id: str | None = None,
         history: list | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -196,6 +199,7 @@ class ChatService:
                     parsed_query=parsed_query,
                     plan=plan,
                     rewrite_queries=rewrite_queries,
+                    user_id=user_id,
                 )
                 telemetry.used_paths = used_paths
                 telemetry.retrieval_count = len(candidates)

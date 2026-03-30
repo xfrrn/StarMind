@@ -72,19 +72,24 @@ async def get_dashboard(
     for bucket in stars_buckets:
         if bucket["max"] is None:
             count_result = await db.execute(
-                select(func.count(Repository.id)).where(Repository.stars >= bucket["min"])
+                select(func.count(Repository.id))
+                .where(Repository.user_id == user_id)
+                .where(Repository.stars >= bucket["min"])
             )
         else:
             count_result = await db.execute(
                 select(func.count(Repository.id))
+                .where(Repository.user_id == user_id)
                 .where(Repository.stars >= bucket["min"])
                 .where(Repository.stars < bucket["max"])
             )
         count = count_result.scalar() or 0
         stars_distribution.append({"name": bucket["name"], "count": count})
 
-    # Total collections
-    collections_result = await db.execute(select(func.count(Collection.id)))
+    # Total collections (user's own collections only)
+    collections_result = await db.execute(
+        select(func.count(Collection.id)).where(Collection.user_id == user_id)
+    )
     total_collections = collections_result.scalar() or 0
 
     return {

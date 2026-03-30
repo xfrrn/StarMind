@@ -142,7 +142,13 @@ class SettingsService:
         user = result.scalar_one_or_none()
 
         if user and user.github_token:
-            return user.github_token
+            # Decrypt if it looks like encrypted data (Fernet tokens start with 'gAAAAA')
+            token = user.github_token
+            if token.startswith('gAAAAA') or token.startswith('gAAAA'):
+                decrypted = decrypt_value(token)
+                if decrypted:
+                    return decrypted
+            return token
         # Fallback to system token
         return get_settings().github_token
 
