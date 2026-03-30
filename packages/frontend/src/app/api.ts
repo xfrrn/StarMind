@@ -251,6 +251,12 @@ export function chatSearchStream(query: string, callbacks: StreamCallbacks): () 
                 signal: controller.signal,
             });
 
+            if (resp.status === 401) {
+                handleUnauthorized();
+                callbacks.onError('Unauthorized');
+                return;
+            }
+
             if (!resp.ok) {
                 callbacks.onError(`Chat failed: ${resp.statusText}`);
                 return;
