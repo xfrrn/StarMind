@@ -75,16 +75,16 @@ class SettingsService:
             "openai_model": settings.openai_model or "gpt-4o-mini",
             # === Chat Retrieval ===
             "chat_similarity_threshold": self._parse_float(settings.chat_similarity_threshold, 0.5),
-            "chat_llm_filter_enabled": settings.chat_llm_filter_enabled,
+            "chat_llm_filter_enabled": settings.chat_llm_filter_enabled if settings.chat_llm_filter_enabled is not None else True,
             # === Sync Configuration ===
             "github_sync_page_concurrency": settings.github_sync_page_concurrency or 4,
             "github_readme_concurrency": settings.github_readme_concurrency or 8,
             "ai_analysis_concurrency": settings.ai_analysis_concurrency or 1,
             # === Feature Toggles ===
-            "auto_summarize": settings.auto_summarize,
-            "include_readmes": settings.include_readmes,
+            "auto_summarize": settings.auto_summarize if settings.auto_summarize is not None else True,
+            "include_readmes": settings.include_readmes if settings.include_readmes is not None else True,
             # === Auto Sync ===
-            "auto_sync_enabled": settings.auto_sync_enabled,
+            "auto_sync_enabled": settings.auto_sync_enabled if settings.auto_sync_enabled is not None else False,
             "auto_sync_time": settings.auto_sync_time or "00:00",
             "timezone": settings.timezone or "UTC",
             "last_sync_at": None,  # Could be added to UserSetting if needed
