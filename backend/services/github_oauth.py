@@ -64,7 +64,7 @@ def get_github_oauth_url(state: str) -> str:
     params = {
         "client_id": settings.github_oauth_client_id,
         "redirect_uri": settings.github_oauth_redirect_uri,
-        "scope": "read:user repo",  # Access to user info and repos
+        "scope": "read:user repo user:email",  # Access to user info, repos, and private emails
         "state": state,
         "response_type": "code",
     }
