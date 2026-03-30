@@ -287,6 +287,11 @@ async def _ensure_user_system_tables():
             text("ALTER TABLE collections ADD COLUMN IF NOT EXISTS ai_introduction text DEFAULT ''")
         )
 
+        # Add tags column to collection_repos table if not exists
+        await conn.execute(
+            text("ALTER TABLE collection_repos ADD COLUMN IF NOT EXISTS tags text DEFAULT '[]'")
+        )
+
         # Migrate existing data to a default user
         await _migrate_to_default_user(conn)
 
