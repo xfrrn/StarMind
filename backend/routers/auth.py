@@ -271,8 +271,8 @@ async def github_oauth_callback(
         await db.commit()
         await db.refresh(user)
 
-        # Generate token
-        access_token = create_access_token(data={"sub": user.id})
+        # Generate token (sub must be a string per JWT spec)
+        access_token = create_access_token(data={"sub": str(user.id)})
 
         return LoginResponse(
             access_token=access_token,
