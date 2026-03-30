@@ -185,8 +185,12 @@ async def init_db():
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
+    # Run create_all first to let SQLAlchemy handle table/index creation
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Then run migration scripts (they use IF NOT EXISTS so won't conflict)
     await _ensure_repository_columns_and_embedding_dimension()
     await _ensure_user_system_tables()
     logger.info("Database tables verified/created")
