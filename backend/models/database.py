@@ -282,6 +282,11 @@ async def _ensure_user_system_tables():
             text("CREATE INDEX IF NOT EXISTS ix_oauth_states_expires_at ON oauth_states(expires_at)")
         )
 
+        # Add ai_introduction column to collections table if not exists
+        await conn.execute(
+            text("ALTER TABLE collections ADD COLUMN IF NOT EXISTS ai_introduction text DEFAULT ''")
+        )
+
         # Migrate existing data to a default user
         await _migrate_to_default_user(conn)
 
