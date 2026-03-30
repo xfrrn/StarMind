@@ -32,6 +32,7 @@ export function clearStoredToken(): void {
 function buildHeaders(extraHeaders?: HeadersInit): HeadersInit {
     const headers: HeadersInit = { ...extraHeaders };
     const token = getStoredToken();
+    console.log('buildHeaders called, token exists:', !!token, token ? token.substring(0, 20) + '...' : 'null');
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
@@ -46,10 +47,14 @@ function handleUnauthorized(): void {
 
 // Fetch with auth header, handle 401 automatically
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const headers = buildHeaders(options.headers as HeadersInit);
+    console.log('authFetch called for:', url);
+    console.log('Authorization header:', headers['Authorization'] ? 'Bearer ' + (headers['Authorization'] as string).substring(7, 27) + '...' : 'MISSING');
     const resp = await fetch(url, {
         ...options,
-        headers: buildHeaders(options.headers as HeadersInit),
+        headers,
     });
+    console.log('authFetch response status:', resp.status);
     if (resp.status === 401) {
         handleUnauthorized();
         throw new Error('Unauthorized');
