@@ -11,7 +11,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    Index,
 )
 from sqlalchemy.orm import relationship
 
@@ -30,9 +29,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=True)  # OAuth users may not have password
-    github_id = Column(String(50), unique=True, nullable=True, index=True)
+    github_id = Column(String(50), unique=True, nullable=True)
     github_token = Column(Text, nullable=True)  # Encrypted storage
     github_username = Column(String(100), nullable=True)
     display_name = Column(String(100), nullable=True)
@@ -48,11 +47,6 @@ class User(Base):
     notes = relationship("RepoNote", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSetting", back_populates="user", uselist=False, cascade="all, delete-orphan")
     sync_logs = relationship("SyncLog", back_populates="user", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        Index("ix_users_email", "email"),
-        Index("ix_users_github_id", "github_id"),
-    )
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"
