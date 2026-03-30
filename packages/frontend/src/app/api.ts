@@ -28,6 +28,35 @@ export function clearStoredToken(): void {
     localStorage.removeItem(TOKEN_KEY);
 }
 
+// Build headers with optional auth token
+function buildHeaders(extraHeaders?: HeadersInit): HeadersInit {
+    const headers: HeadersInit = { ...extraHeaders };
+    const token = getStoredToken();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
+// Handle 401 response - clear token and redirect to login
+function handleUnauthorized(): void {
+    clearStoredToken();
+    window.location.href = '/login';
+}
+
+// Fetch with auth header, handle 401 automatically
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const resp = await fetch(url, {
+        ...options,
+        headers: buildHeaders(options.headers as HeadersInit),
+    });
+    if (resp.status === 401) {
+        handleUnauthorized();
+        throw new Error('Unauthorized');
+    }
+    return resp;
+}
+
 // ---- Auth Types ----
 
 export interface User {
@@ -73,13 +102,7 @@ export async function register(email: string, password: string): Promise<LoginRe
 }
 
 export async function getCurrentUser(): Promise<User> {
-    const token = getStoredToken();
-    const headers: HeadersInit = {};
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const resp = await fetch(`${API_BASE}/auth/me`, { headers });
+    const resp = await authFetch(`${API_BASE}/auth/me`);
     if (!resp.ok) {
         throw new Error('Failed to get current user');
     }
@@ -194,9 +217,9 @@ export interface ChatResponse {
 }
 
 export async function chatSearch(query: string): Promise<ChatResponse> {
-    const resp = await fetch(`${API_BASE}/chat`, {
+    const resp = await authFetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ query }),
     });
     if (!resp.ok) throw new Error(`Chat failed: ${resp.statusText}`);
@@ -223,7 +246,7 @@ export function chatSearchStream(query: string, callbacks: StreamCallbacks): () 
         try {
             const resp = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ query }),
                 signal: controller.signal,
             });
@@ -313,15 +336,15 @@ export interface ConversationDetail extends Conversation {
 }
 
 export async function listConversations(limit = 20, offset = 0): Promise<Conversation[]> {
-    const resp = await fetch(`${API_BASE}/conversations?limit=${limit}&offset=${offset}`);
+    const resp = await authFetch(`${API_BASE}/conversations?limit=${limit}&offset=${offset}`);
     if (!resp.ok) throw new Error(`Failed to list conversations: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function createConversation(title = ''): Promise<Conversation> {
-    const resp = await fetch(`${API_BASE}/conversations`, {
+    const resp = await authFetch(`${API_BASE}/conversations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ title }),
     });
     if (!resp.ok) throw new Error(`Failed to create conversation: ${resp.statusText}`);
@@ -329,20 +352,20 @@ export async function createConversation(title = ''): Promise<Conversation> {
 }
 
 export async function getConversation(id: string): Promise<ConversationDetail> {
-    const resp = await fetch(`${API_BASE}/conversations/${id}`);
+    const resp = await authFetch(`${API_BASE}/conversations/${id}`);
     if (!resp.ok) throw new Error(`Failed to get conversation: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' });
+    const resp = await authFetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' });
     if (!resp.ok) throw new Error(`Failed to delete conversation: ${resp.statusText}`);
 }
 
 export async function addMessage(conversationId: string, role: string, content: string): Promise<Message> {
-    const resp = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+    const resp = await authFetch(`${API_BASE}/conversations/${conversationId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ role, content }),
     });
     if (!resp.ok) throw new Error(`Failed to add message: ${resp.statusText}`);
@@ -426,7 +449,7 @@ export interface SyncTriggerResponse {
 
 export const triggerSync = async (fullSync = false): Promise<SyncTriggerResponse> => {
     const url = fullSync ? `${API_BASE}/sync?full_sync=true` : `${API_BASE}/sync`;
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
         method: 'POST',
     });
     if (!response.ok) throw new Error('Failed to trigger sync');
@@ -434,7 +457,7 @@ export const triggerSync = async (fullSync = false): Promise<SyncTriggerResponse
 };
 
 export const triggerAiAnalysis = async (): Promise<SyncTriggerResponse> => {
-    const response = await fetch(`${API_BASE}/sync/analyze`, {
+    const response = await authFetch(`${API_BASE}/sync/analyze`, {
         method: 'POST',
     });
     if (!response.ok) throw new Error('Failed to trigger AI analysis');
@@ -442,7 +465,7 @@ export const triggerAiAnalysis = async (): Promise<SyncTriggerResponse> => {
 };
 
 export const getSyncStatus = async (): Promise<SyncStatusResponse> => {
-    const response = await fetch(`${API_BASE}/sync/status`);
+    const response = await authFetch(`${API_BASE}/sync/status`);
     if (!response.ok) throw new Error('Failed to get sync status');
     return response.json();
 };
@@ -506,15 +529,15 @@ export interface TestConnectionResponse {
 }
 
 export async function fetchSettings(): Promise<SettingsData> {
-    const resp = await fetch(`${API_BASE}/settings`);
+    const resp = await authFetch(`${API_BASE}/settings`);
     if (!resp.ok) throw new Error(`Fetch settings failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function updateSettings(data: SettingsUpdate): Promise<SettingsData> {
-    const resp = await fetch(`${API_BASE}/settings`, {
+    const resp = await authFetch(`${API_BASE}/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(`Update settings failed: ${resp.statusText}`);
@@ -522,7 +545,7 @@ export async function updateSettings(data: SettingsUpdate): Promise<SettingsData
 }
 
 export async function testGithubConnection(): Promise<TestConnectionResponse> {
-    const resp = await fetch(`${API_BASE}/settings/test-github`, {
+    const resp = await authFetch(`${API_BASE}/settings/test-github`, {
         method: 'POST',
     });
     if (!resp.ok) throw new Error(`Test GitHub failed: ${resp.statusText}`);
@@ -530,7 +553,7 @@ export async function testGithubConnection(): Promise<TestConnectionResponse> {
 }
 
 export async function testOpenaiConnection(): Promise<TestConnectionResponse> {
-    const resp = await fetch(`${API_BASE}/settings/test-openai`, {
+    const resp = await authFetch(`${API_BASE}/settings/test-openai`, {
         method: 'POST',
     });
     if (!resp.ok) throw new Error(`Test OpenAI failed: ${resp.statusText}`);
@@ -554,9 +577,9 @@ export async function chatWithRepo(
     message: string,
     history: RepoChatTurn[] = []
 ): Promise<RepoChatResponse> {
-    const resp = await fetch(`${API_BASE}/chat/repo/${repoId}`, {
+    const resp = await authFetch(`${API_BASE}/chat/repo/${repoId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ message, history }),
     });
     if (!resp.ok) throw new Error(`Chat failed: ${resp.statusText}`);
@@ -618,22 +641,22 @@ export interface CollectionReposResponse {
 
 export async function listCollections(includeRepos = false): Promise<Collection[]> {
     const url = `${API_BASE}/collections?include_repos=${includeRepos}`;
-    const resp = await fetch(url);
+    const resp = await authFetch(url);
     if (!resp.ok) throw new Error(`Fetch collections failed: ${resp.statusText}`);
     const data = await resp.json();
     return data.collections;
 }
 
 export async function getCollection(collectionId: string): Promise<Collection> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}`);
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}`);
     if (!resp.ok) throw new Error(`Fetch collection failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function createCollection(data: CollectionCreate): Promise<Collection> {
-    const resp = await fetch(`${API_BASE}/collections`, {
+    const resp = await authFetch(`${API_BASE}/collections`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(`Create collection failed: ${resp.statusText}`);
@@ -641,9 +664,9 @@ export async function createCollection(data: CollectionCreate): Promise<Collecti
 }
 
 export async function updateCollection(collectionId: string, data: CollectionUpdate): Promise<Collection> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error(`Update collection failed: ${resp.statusText}`);
@@ -651,7 +674,7 @@ export async function updateCollection(collectionId: string, data: CollectionUpd
 }
 
 export async function deleteCollection(collectionId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Delete collection failed: ${resp.statusText}`);
@@ -662,9 +685,9 @@ export async function addRepoToCollection(
     repoId: number,
     notes = ""
 ): Promise<void> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/repos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ repo_id: repoId, notes }),
     });
     if (!resp.ok) throw new Error(`Add repo to collection failed: ${resp.statusText}`);
@@ -674,7 +697,7 @@ export async function removeRepoFromCollection(
     collectionId: string,
     repoId: number
 ): Promise<void> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Remove repo from collection failed: ${resp.statusText}`);
@@ -687,20 +710,20 @@ export async function getCollectionRepos(
     tags: string[] = []
 ): Promise<CollectionReposResponse> {
     const tagsParam = tags.length > 0 ? `&tags=${tags.join(",")}` : "";
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos?page=${page}&limit=${limit}${tagsParam}`);
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/repos?page=${page}&limit=${limit}${tagsParam}`);
     if (!resp.ok) throw new Error(`Fetch collection repos failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function getRepoCollections(repoId: number): Promise<Collection[]> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/collections`);
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/collections`);
     if (!resp.ok) throw new Error(`Fetch repo collections failed: ${resp.statusText}`);
     const data = await resp.json();
     return data.collections;
 }
 
 export async function getAllCollectionTags(): Promise<string[]> {
-    const resp = await fetch(`${API_BASE}/collections/tags`);
+    const resp = await authFetch(`${API_BASE}/collections/tags`);
     if (!resp.ok) throw new Error(`Fetch tags failed: ${resp.statusText}`);
     const data = await resp.json();
     return data.tags;
@@ -714,15 +737,15 @@ export interface NoteResponse {
 }
 
 export async function getRepoNote(repoId: string): Promise<NoteResponse> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`);
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/note`);
     if (!resp.ok) throw new Error(`Fetch note failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function updateRepoNote(repoId: string, note: string): Promise<NoteResponse> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/note`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ note }),
     });
     if (!resp.ok) throw new Error(`Update note failed: ${resp.statusText}`);
@@ -730,7 +753,7 @@ export async function updateRepoNote(repoId: string, note: string): Promise<Note
 }
 
 export async function deleteRepoNote(repoId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/note`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/note`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Delete note failed: ${resp.statusText}`);
@@ -773,13 +796,13 @@ export interface ShareResponse {
 }
 
 export async function getShareStatus(collectionId: string): Promise<ShareStatusResponse> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`);
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/share`);
     if (!resp.ok) throw new Error(`Fetch share status failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function createShare(collectionId: string): Promise<ShareResponse> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/share`, {
         method: 'POST',
     });
     if (!resp.ok) throw new Error(`Create share failed: ${resp.statusText}`);
@@ -787,7 +810,7 @@ export async function createShare(collectionId: string): Promise<ShareResponse> 
 }
 
 export async function deleteShare(collectionId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/share`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/share`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Delete share failed: ${resp.statusText}`);
@@ -844,7 +867,7 @@ export async function importBackup(file: File): Promise<ImportResponse> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const resp = await fetch(`${API_BASE}/backup/import`, {
+    const resp = await authFetch(`${API_BASE}/backup/import`, {
         method: 'POST',
         body: formData,
     });
@@ -877,13 +900,13 @@ export interface ArchivedRepo {
 }
 
 export async function getArchiveStatus(repoId: string): Promise<ArchiveStatus> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`);
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/archive`);
     if (!resp.ok) throw new Error(`Fetch archive status failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function createArchive(repoId: string): Promise<ArchiveStatus> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/archive`, {
         method: 'POST',
     });
     if (!resp.ok) throw new Error(`Create archive failed: ${resp.statusText}`);
@@ -891,7 +914,7 @@ export async function createArchive(repoId: string): Promise<ArchiveStatus> {
 }
 
 export async function deleteArchive(repoId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/archive`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/archive`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Delete archive failed: ${resp.statusText}`);
@@ -902,7 +925,7 @@ export function getArchiveDownloadUrl(repoId: string): string {
 }
 
 export async function listArchives(): Promise<{ repositories: ArchivedRepo[]; total: number }> {
-    const resp = await fetch(`${API_BASE}/archives`);
+    const resp = await authFetch(`${API_BASE}/archives`);
     if (!resp.ok) throw new Error(`Fetch archives failed: ${resp.statusText}`);
     return resp.json();
 }
@@ -933,15 +956,15 @@ export interface SharedArchiveInfo {
 }
 
 export async function getArchiveShareStatus(repoId: string): Promise<ArchiveShareStatus> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`);
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/share`);
     if (!resp.ok) throw new Error(`Fetch share status failed: ${resp.statusText}`);
     return resp.json();
 }
 
 export async function createArchiveShare(repoId: string, expiresInHours: number): Promise<ArchiveShareCreate> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/share`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ expires_in_hours: expiresInHours }),
     });
     if (!resp.ok) throw new Error(`Create share failed: ${resp.statusText}`);
@@ -949,7 +972,7 @@ export async function createArchiveShare(repoId: string, expiresInHours: number)
 }
 
 export async function deleteArchiveShare(repoId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/repositories/${repoId}/share`, {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/share`, {
         method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Delete share failed: ${resp.statusText}`);
@@ -969,9 +992,9 @@ export function getSharedArchiveDownloadUrl(shareId: string): string {
 // ---- Collection Overview ----
 
 export async function updateCollectionOverview(collectionId: string, content: string): Promise<Collection> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/overview`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/overview`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ content }),
     });
     if (!resp.ok) throw new Error(`Update overview failed: ${resp.statusText}`);
@@ -979,9 +1002,9 @@ export async function updateCollectionOverview(collectionId: string, content: st
 }
 
 export async function generateCollectionOverview(collectionId: string, prompt: string = ""): Promise<{ content: string }> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/overview/generate`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/overview/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ prompt }),
     });
     if (!resp.ok) throw new Error(`Generate overview failed: ${resp.statusText}`);
@@ -989,9 +1012,9 @@ export async function generateCollectionOverview(collectionId: string, prompt: s
 }
 
 export async function updateRepoTags(collectionId: string, repoId: string, tags: string[]): Promise<{ success: boolean }> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}/tags`, {
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/repos/${repoId}/tags`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ tags }),
     });
     if (!resp.ok) throw new Error(`Update repo tags failed: ${resp.statusText}`);
@@ -999,7 +1022,7 @@ export async function updateRepoTags(collectionId: string, repoId: string, tags:
 }
 
 export async function getCollectionRepoTags(collectionId: string): Promise<{ tags: string[] }> {
-    const resp = await fetch(`${API_BASE}/collections/${collectionId}/repo-tags`);
+    const resp = await authFetch(`${API_BASE}/collections/${collectionId}/repo-tags`);
     if (!resp.ok) throw new Error(`Fetch collection repo tags failed: ${resp.statusText}`);
     return resp.json();
 }
