@@ -68,9 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const handleGithubLogin = useCallback(async (code: string, state: string) => {
+        console.log('handleGithubLogin called with code:', !!code, 'state:', !!state);
         const response = await loginWithGithub(code, state);
+        console.log('loginWithGithub response:', response);
+        console.log('access_token:', response.access_token?.substring(0, 20) + '...');
+        console.log('user:', response.user);
         localStorage.setItem(TOKEN_KEY, response.access_token);
+        console.log('Token saved to localStorage');
         setUser(response.user);
+        console.log('User state set');
     }, []);
 
     const logout = useCallback(() => {

@@ -13,13 +13,20 @@ export function OAuthCallbackPage() {
             const code = params.get('code');
             const state = params.get('state');
 
+            console.log('OAuth callback params:', { code: !!code, state: !!state });
+
             if (!code || !state) {
+                console.log('Missing code or state, redirecting to login');
                 navigate('/login');
                 return;
             }
 
             try {
+                console.log('Calling loginWithGithub...');
                 await loginWithGithub(code, state);
+                console.log('loginWithGithub success, checking token...');
+                const token = localStorage.getItem('starmind_token');
+                console.log('Token after login:', !!token, token?.substring(0, 20) + '...');
                 navigate('/');
             } catch (err) {
                 console.error('GitHub login failed:', err);
