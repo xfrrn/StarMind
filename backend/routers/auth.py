@@ -187,11 +187,20 @@ async def github_oauth_callback(
                 primary_email = email_info.get("email")
                 break
 
+        # Fallback to public email from user profile
         if not primary_email:
             primary_email = github_user.get("email")
 
         if not primary_email:
-            raise ValueError("Could not get email from GitHub account")
+            logger.warning(
+                "No email found for GitHub user %s. "
+                "Please ensure your GitHub account has a public email or grant email access.",
+                github_username
+            )
+            raise ValueError(
+                "No email found. Please add a public email to your GitHub profile "
+                "or re-authorize with email access."
+            )
 
         # Find or create user
         result = await db.execute(
