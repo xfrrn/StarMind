@@ -85,8 +85,8 @@ async def register(
     await db.commit()
     await db.refresh(user)
 
-    # Generate token
-    access_token = create_access_token(data={"sub": user.id})
+    # Generate token (sub must be a string per JWT spec)
+    access_token = create_access_token(data={"sub": str(user.id)})
 
     return LoginResponse(
         access_token=access_token,
@@ -122,8 +122,8 @@ async def login(
             detail="User account is disabled"
         )
 
-    # Generate token
-    access_token = create_access_token(data={"sub": user.id})
+    # Generate token (sub must be a string per JWT spec)
+    access_token = create_access_token(data={"sub": str(user.id)})
 
     return LoginResponse(
         access_token=access_token,
