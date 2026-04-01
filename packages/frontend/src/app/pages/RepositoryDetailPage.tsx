@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Badge } from '../components/Badge';
-import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, getRepoNote, updateRepoNote, deleteRepoNote, getArchiveStatus, createArchive, deleteArchive, getArchiveDownloadUrl, type Collection, type ArchiveStatus } from '../api';
+import { fetchRepository, listCollections, getRepoCollections, addRepoToCollection, removeRepoFromCollection, getRepoNote, updateRepoNote, deleteRepoNote, getArchiveStatus, createArchive, deleteArchive, downloadArchive, type Collection, type ArchiveStatus } from '../api';
 import { RepoChat } from '../components/RepoChat';
 import type { Repository } from '../data';
 
@@ -162,9 +162,22 @@ export function RepositoryDetailPage() {
     }
   };
 
-  const handleDownloadArchive = () => {
+  const handleDownloadArchive = async () => {
     if (!id) return;
-    window.open(getArchiveDownloadUrl(id), '_blank');
+    try {
+      const { blob, filename } = await downloadArchive(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download archive:', err);
+      alert(t('repoDetail.downloadFailed') || 'Failed to download archive');
+    }
   };
 
   const handleAddToCollection = async (collectionId: string) => {

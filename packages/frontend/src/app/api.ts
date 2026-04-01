@@ -935,6 +935,21 @@ export function getArchiveDownloadUrl(repoId: string): string {
     return `${API_BASE}/repositories/${repoId}/archive/download`;
 }
 
+// Download archive with auth header (returns Blob for browser download)
+export async function downloadArchive(repoId: string): Promise<{ blob: Blob; filename: string }> {
+    const resp = await authFetch(`${API_BASE}/repositories/${repoId}/archive/download`);
+    if (!resp.ok) throw new Error(`Download archive failed: ${resp.statusText}`);
+    const blob = await resp.blob();
+    // Extract filename from Content-Disposition header or use default
+    const contentDisposition = resp.headers.get('Content-Disposition');
+    let filename = `archive_${repoId}.zip`;
+    if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+?)"?(?:;|$)/);
+        if (match) filename = match[1];
+    }
+    return { blob, filename };
+}
+
 export async function listArchives(): Promise<{ repositories: ArchivedRepo[]; total: number }> {
     const resp = await authFetch(`${API_BASE}/archives`);
     if (!resp.ok) throw new Error(`Fetch archives failed: ${resp.statusText}`);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Archive, Download, Trash2, Star, ExternalLink, RefreshCw, Share2, Loader2 } from 'lucide-react';
-import { listArchives, deleteArchive, getArchiveDownloadUrl, createArchive, type ArchivedRepo } from '../api';
+import { listArchives, deleteArchive, downloadArchive, createArchive, type ArchivedRepo } from '../api';
 import { Badge } from '../components/Badge';
 import { ArchiveShareModal } from '../components/ArchiveShareModal';
 
@@ -65,8 +65,22 @@ export function ArchivesPage() {
     }
   };
 
-  const handleDownload = (repoId: number) => {
-    window.open(getArchiveDownloadUrl(String(repoId)), '_blank');
+  const handleDownload = async (repoId: number) => {
+    try {
+      const { blob, filename } = await downloadArchive(String(repoId));
+      // Create blob URL and trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download archive:', err);
+      alert(t('archives.downloadFailed') || 'Failed to download archive');
+    }
   };
 
   const handleUpdate = async (repoId: number) => {
