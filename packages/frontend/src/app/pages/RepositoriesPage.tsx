@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import { useSearchParams } from 'react-router';
 import { Search, ChevronDown, Settings2, ArrowUpDown, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RepoCard } from '../components/RepoCard';
@@ -6,25 +7,80 @@ import { Badge } from '../components/Badge';
 import { fetchRepositories, fetchStats, type RepoFilters, type StatsResponse } from '../api';
 import type { Repository } from '../data';
 
+// URL 参数名称映射
+const PARAMS = {
+  search: 'q',
+  language: 'lang',
+  category: 'cat',
+  activity: 'activity',
+  hasUI: 'hasUI',
+  hasAPI: 'hasAPI',
+  starsMin: 'starsMin',
+  starsMax: 'starsMax',
+  sort: 'sort',
+  page: 'page',
+} as const;
+
 export function RepositoriesPage() {
   const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // 从 URL 读取初始值
+  const getUrlState = useCallback(() => ({
+    searchQuery: searchParams.get(PARAMS.search) || '',
+    selectedLanguage: searchParams.get(PARAMS.language) || '',
+    selectedCategory: searchParams.get(PARAMS.category) || '',
+    selectedActivity: searchParams.get(PARAMS.activity) || '',
+    filterHasUI: searchParams.get(PARAMS.hasUI) === 'true' ? true : undefined,
+    filterHasAPI: searchParams.get(PARAMS.hasAPI) === 'true' ? true : undefined,
+    starsMin: searchParams.get(PARAMS.starsMin) ? parseInt(searchParams.get(PARAMS.starsMin)!) : undefined,
+    starsMax: searchParams.get(PARAMS.starsMax) ? parseInt(searchParams.get(PARAMS.starsMax)!) : undefined,
+    sortBy: searchParams.get(PARAMS.sort) || 'stars',
+    page: parseInt(searchParams.get(PARAMS.page) || '1'),
+  }), [searchParams]);
+
+  const urlState = useMemo(() => getUrlState(), [getUrlState]);
+
+  const [searchQuery, setSearchQuery] = useState(urlState.searchQuery);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(urlState.searchQuery);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(urlState.page);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<StatsResponse | null>(null);
 
-  // Filters
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedActivity, setSelectedActivity] = useState<string>('');
-  const [filterHasUI, setFilterHasUI] = useState<boolean | undefined>(undefined);
-  const [filterHasAPI, setFilterHasAPI] = useState<boolean | undefined>(undefined);
-  const [starsMin, setStarsMin] = useState<number | undefined>(undefined);
-  const [starsMax, setStarsMax] = useState<number | undefined>(undefined);
-  const [sortBy, setSortBy] = useState<string>('stars');
+  // Filters - 从 URL 初始化
+  const [selectedLanguage, setSelectedLanguage] = useState(urlState.selectedLanguage);
+  const [selectedCategory, setSelectedCategory] = useState(urlState.selectedCategory);
+  const [selectedActivity, setSelectedActivity] = useState(urlState.selectedActivity);
+  const [filterHasUI, setFilterHasUI] = useState<boolean | undefined>(urlState.filterHasUI);
+  const [filterHasAPI, setFilterHasAPI] = useState<boolean | undefined>(urlState.filterHasAPI);
+  const [starsMin, setStarsMin] = useState<number | undefined>(urlState.starsMin);
+  const [starsMax, setStarsMax] = useState<number | undefined>(urlState.starsMax);
+  const [sortBy, setSortBy] = useState(urlState.sortBy);
+
+  // 更新 URL 参数
+  const updateUrlParams = useCallback(() => {
+    const params = new URLSearchParams();
+
+    if (searchQuery) params.set(PARAMS.search, searchQuery);
+    if (selectedLanguage) params.set(PARAMS.language, selectedLanguage);
+    if (selectedCategory) params.set(PARAMS.category, selectedCategory);
+    if (selectedActivity) params.set(PARAMS.activity, selectedActivity);
+    if (filterHasUI) params.set(PARAMS.hasUI, 'true');
+    if (filterHasAPI) params.set(PARAMS.hasAPI, 'true');
+    if (starsMin !== undefined) params.set(PARAMS.starsMin, String(starsMin));
+    if (starsMax !== undefined) params.set(PARAMS.starsMax, String(starsMax));
+    if (sortBy !== 'stars') params.set(PARAMS.sort, sortBy);
+    if (page > 1) params.set(PARAMS.page, String(page));
+
+    setSearchParams(params, { replace: true });
+  }, [searchQuery, selectedLanguage, selectedCategory, selectedActivity, filterHasUI, filterHasAPI, starsMin, starsMax, sortBy, page, setSearchParams]);
+
+  // 当筛选条件变化时更新 URL
+  useEffect(() => {
+    updateUrlParams();
+  }, [updateUrlParams]);
 
   const loadRepos = async () => {
     setLoading(true);

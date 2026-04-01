@@ -5,10 +5,10 @@ class SettingsResponse(BaseModel):
     """Response model for user settings."""
 
     # === User Info ===
-    github_username: str = ""
-    first_name: str = ""
-    last_name: str = ""
-    email: str = ""
+    github_username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
 
     # === API Keys (masked) ===
     github_token_set: bool = False

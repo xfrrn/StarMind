@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
-from routers import auth, chat, conversations, repositories, sync, settings, collections, dashboard, public, backup, archives
+from routers import auth, chat, conversations, repositories, sync, settings, collections, dashboard, public, backup, archives, admin
 from services.application.scheduler_service import init_scheduler, get_scheduler
 
 logging.basicConfig(
@@ -81,6 +81,7 @@ app.include_router(dashboard.router)
 app.include_router(public.router)
 app.include_router(backup.router)
 app.include_router(archives.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health")

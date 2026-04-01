@@ -43,7 +43,8 @@
     "aiSummary": "AI 摘要",
     "recommendedRepos": "推荐仓库",
     "recentSearches": "最近搜索",
-    "suggestedQueries": "推荐查询"
+    "suggestedQueries": "推荐查询",
+    "clearResults": "清空结果"
   },
   "suggestions": {
     "reactDragDrop": "支持拖放的 React 组件",

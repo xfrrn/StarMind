@@ -43,7 +43,8 @@
     "aiSummary": "AI Summary",
     "recommendedRepos": "Recommended Repositories",
     "recentSearches": "Recent Searches",
-    "suggestedQueries": "Suggested Queries"
+    "suggestedQueries": "Suggested Queries",
+    "clearResults": "Clear Results"
   },
   "suggestions": {
     "reactDragDrop": "React components with drag and drop",

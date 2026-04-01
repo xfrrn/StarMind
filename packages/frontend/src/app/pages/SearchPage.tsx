@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { Search, Sparkles, MessageSquare, Loader2, Clock, X, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from 'react-i18next';
 import { RepoCard } from '../components/RepoCard';
-import { useSearch, useSearchHistory } from '../hooks';
+import { useSearchState, useSearchHistory } from '../hooks';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SearchPage() {
   const { t } = useTranslation();
-  const { state, doSearch, setQuery, reset } = useSearch();
+  const { state, doSearch, setQuery, clearResults } = useSearchState();
   const { query, isSearching, hasSearched, answer, results, error, statusMessage } = state;
   const { history, addHistory, removeHistory, clearHistory } = useSearchHistory();
 
@@ -24,11 +24,6 @@ export function SearchPage() {
     doSearch(historyQuery);
     addHistory(historyQuery);
   }, [setQuery, doSearch, addHistory]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => reset();
-  }, [reset]);
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-6">
@@ -82,13 +77,22 @@ export function SearchPage() {
             ) : (
               <>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl p-6 mb-8">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                      <Sparkles className="w-4 h-4" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                        {t('search.aiSummary')}
+                      </h2>
                     </div>
-                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                      {t('search.aiSummary')}
-                    </h2>
+                    <button
+                      onClick={clearResults}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 bg-white/50 dark:bg-zinc-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 border border-zinc-200 dark:border-zinc-700 hover:border-red-200 dark:hover:border-red-900/50 rounded-lg transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      {t('search.clearResults')}
+                    </button>
                   </div>
                   <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>

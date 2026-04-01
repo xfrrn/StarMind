@@ -113,3 +113,5 @@ Required in `backend/.env`:
 - Async/await for all I/O operations
 - Type annotations on all function signatures
 - Use `logging` module, not `print`
+
+Any GIt commit must agreed by me.
