@@ -4,6 +4,10 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    # Application
+    app_name: str = "StarMind"
+    app_version: str = "1.0.0"
+
     # GitHub
     github_token: str = ""
     github_api_url: str = "https://api.github.com"
