@@ -7,6 +7,7 @@ from slowapi import Limiter
 from models.database import async_session, get_db
 from routers.schemas import SyncStatusResponse, SyncTriggerResponse
 from services.service_registry import get_sync_service
+from config import get_settings
 
 router = APIRouter(prefix="/api", tags=["sync"])
 
@@ -24,8 +25,10 @@ async def _run_analysis_background():
 @router.post("/sync", response_model=SyncTriggerResponse)
 async def trigger_sync(request: Request, background_tasks: BackgroundTasks):
     """Trigger a sync of starred repositories."""
-    limiter: Limiter = request.app.state.limiter
-    await limiter.limit("5/hour")(request)
+    # Apply rate limiting if enabled
+    if hasattr(request.app.state, 'limiter'):
+        limiter: Limiter = request.app.state.limiter
+        await limiter.limit(get_settings().rate_limit_sync)(request)
 
     service = get_sync_service()
     validation = service.validate_sync_trigger()
