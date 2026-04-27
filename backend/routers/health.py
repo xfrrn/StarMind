@@ -1,5 +1,6 @@
 """Health check endpoint with dependency status monitoring."""
 
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,11 +8,15 @@ from sqlalchemy import text
 import httpx
 from models.database import get_db
 from config import get_settings
+from backend.utils.logger import logger
 
 router = APIRouter()
 
 # Track startup time
 _startup_time = datetime.now(timezone.utc)
+
+# Shared HTTP client for health checks
+_http_client = httpx.AsyncClient(timeout=5.0)
 
 
 @router.get("/api/health")
@@ -44,42 +49,43 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     }
 
 
-async def _check_database(db: AsyncSession) -> dict:
+async def _check_database(db: AsyncSession) -> dict[str, str]:
     """Check database connectivity."""
     try:
-        await db.execute(text("SELECT 1"))
+        await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=5.0)
         return {"status": "healthy"}
     except Exception as e:
+        logger.debug(f"Database health check failed: {e}")
         return {"status": "unhealthy", "error": str(e)}
 
 
-async def _check_github_api(token: str) -> dict:
+async def _check_github_api(token: str) -> dict[str, str]:
     """Check GitHub API connectivity."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                "https://api.github.com/user",
-                headers={"Authorization": f"token {token}"}
-            )
-            if response.status_code == 200:
-                return {"status": "healthy"}
-            else:
-                return {"status": "degraded", "error": f"HTTP {response.status_code}"}
+        response = await _http_client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"token {token}"}
+        )
+        if response.status_code == 200:
+            return {"status": "healthy"}
+        else:
+            return {"status": "degraded", "error": f"HTTP {response.status_code}"}
     except Exception as e:
+        logger.debug(f"GitHub API health check failed: {e}")
         return {"status": "unhealthy", "error": str(e)}
 
 
-async def _check_openai_api(api_key: str) -> dict:
+async def _check_openai_api(api_key: str) -> dict[str, str]:
     """Check OpenAI API connectivity."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"}
-            )
-            if response.status_code == 200:
-                return {"status": "healthy"}
-            else:
-                return {"status": "degraded", "error": f"HTTP {response.status_code}"}
+        response = await _http_client.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"}
+        )
+        if response.status_code == 200:
+            return {"status": "healthy"}
+        else:
+            return {"status": "degraded", "error": f"HTTP {response.status_code}"}
     except Exception as e:
+        logger.debug(f"OpenAI API health check failed: {e}")
         return {"status": "unhealthy", "error": str(e)}
