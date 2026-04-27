@@ -1,6 +1,7 @@
 """Health check endpoint with dependency status monitoring."""
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,8 @@ from sqlalchemy import text
 import httpx
 from models.database import get_db
 from config import get_settings
-from backend.utils.logger import logger
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

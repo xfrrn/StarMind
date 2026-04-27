@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "text"  # "text" or "json"
+
     @field_validator('cors_origins')
     @classmethod
     def validate_cors_origins(cls, v: str) -> str:
