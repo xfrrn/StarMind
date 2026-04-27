@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     github_sync_page_concurrency: int = 4
     github_readme_concurrency: int = 8
 
+    # CORS
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_allow_credentials: bool = True
+    cors_allow_methods: list[str] = ["GET", "POST", "DELETE"]
+    cors_allow_headers: list[str] = ["Content-Type", "Authorization", "X-Correlation-ID"]
+
     # OpenAI
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

@@ -7,7 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import init_db
-from routers import chat, conversations, repositories, sync, settings
+from routers import chat, conversations, repositories, sync, settings as settings_router
+from config import get_settings
+
+settings = get_settings()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,13 +36,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow frontend dev server
+# CORS — configurable origins for production
+origins = [origin.strip() for origin in settings.cors_origins.split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
 
 # Register routers
@@ -47,7 +51,7 @@ app.include_router(chat.router)
 app.include_router(conversations.router)
 app.include_router(repositories.router)
 app.include_router(sync.router)
-app.include_router(settings.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/api/health")
