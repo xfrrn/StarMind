@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     cors_allow_credentials: bool = True
-    cors_allow_methods: list[str] = ["GET", "POST", "DELETE"]
+    cors_allow_methods: list[str] = ["GET", "POST", "DELETE", "OPTIONS"]
     cors_allow_headers: list[str] = ["Content-Type", "Authorization", "X-Correlation-ID"]
 
     # OpenAI
@@ -37,6 +38,13 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
+
+    @field_validator('cors_origins')
+    @classmethod
+    def validate_cors_origins(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("CORS_ORIGINS cannot be empty")
+        return v
 
     model_config = {
         "env_file": ".env",

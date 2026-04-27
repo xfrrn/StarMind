@@ -37,7 +37,10 @@ app = FastAPI(
 )
 
 # CORS — configurable origins for production
-origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+if not origins:
+    raise ValueError("No valid CORS origins configured")
+logger.info(f"CORS enabled for origins: {origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
