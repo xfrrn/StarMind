@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     cors_allow_methods: list[str] = ["GET", "POST", "DELETE", "OPTIONS"]
     cors_allow_headers: list[str] = ["Content-Type", "Authorization", "X-Correlation-ID"]
 
+    # Rate Limiting
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "100/minute"
+    rate_limit_sync: str = "5/hour"
+    rate_limit_chat: str = "20/minute"
+
     # OpenAI
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

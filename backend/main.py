@@ -5,7 +5,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from middleware.rate_limit import create_limiter, rate_limit_exceeded_handler
 from models.database import init_db
 from routers import chat, conversations, repositories, sync, settings as settings_router
 from config import get_settings
@@ -35,6 +38,12 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Rate limiting
+if settings.rate_limit_enabled:
+    limiter = create_limiter()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # CORS — configurable origins for production
 origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
