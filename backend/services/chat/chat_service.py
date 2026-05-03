@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import Settings
 from core.llm import LLMClient
 from core.retrieval import EmbeddingService
+from services.chat.candidate_filter import CandidateFilter
 from services.chat.context_builder import ContextBuilder
 from services.chat.intent_router import IntentRouter
 from services.chat.models import (
@@ -39,6 +40,7 @@ class ChatService:
         embedding_service: EmbeddingService,
         policy: ChatPolicy | None = None,
     ):
+        self.settings = settings
         self.policy = policy or ChatPolicy()
         self.intent_router = IntentRouter()
         self.query_parser = QueryParser()
@@ -50,6 +52,10 @@ class ChatService:
             policy=self.policy,
         )
         self.reranker = Reranker()
+        self.candidate_filter = CandidateFilter(
+            settings=settings,
+            llm_client=llm_client,
+        )
         self.context_builder = ContextBuilder(self.policy)
         self.response_generator = ResponseGenerator(
             llm_client,
@@ -60,6 +66,7 @@ class ChatService:
         self,
         db: AsyncSession,
         user_message: str,
+        user_id: int | None = None,
         session_id: str | None = None,
         history: list | None = None,
     ) -> ChatResponsePayload:
@@ -86,6 +93,7 @@ class ChatService:
                     parsed_query=parsed_query,
                     plan=plan,
                     rewrite_queries=rewrite_queries,
+                    user_id=user_id,
                 )
                 telemetry.used_paths = used_paths
                 telemetry.retrieval_count = len(candidates)
@@ -95,6 +103,13 @@ class ChatService:
                     top_k=self.policy.max_reranked_candidates,
                 )
                 telemetry.reranked_count = len(ranked)
+
+                # Apply threshold + LLM filtering
+                ranked = await self.candidate_filter.filter_candidates(
+                    query=request.user_message,
+                    candidates=ranked,
+                )
+                telemetry.notes.append(f"filtered to {len(ranked)}")
             except Exception as e:
                 logger.error("Retrieval degraded in chat pipeline: %s", e)
                 telemetry.degraded = True
@@ -134,6 +149,7 @@ class ChatService:
         self,
         db: AsyncSession,
         user_message: str,
+        user_id: int | None = None,
         session_id: str | None = None,
         history: list | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -183,6 +199,7 @@ class ChatService:
                     parsed_query=parsed_query,
                     plan=plan,
                     rewrite_queries=rewrite_queries,
+                    user_id=user_id,
                 )
                 telemetry.used_paths = used_paths
                 telemetry.retrieval_count = len(candidates)
@@ -192,6 +209,14 @@ class ChatService:
                     top_k=self.policy.max_reranked_candidates,
                 )
                 telemetry.reranked_count = len(ranked)
+
+                # Apply threshold + LLM filtering
+                yield status_event("filtering", "正在筛选最相关的结果...")
+                ranked = await self.candidate_filter.filter_candidates(
+                    query=request.user_message,
+                    candidates=ranked,
+                )
+                telemetry.notes.append(f"filtered to {len(ranked)}")
             except Exception as e:
                 logger.error("Retrieval degraded in chat stream pipeline: %s", e)
                 telemetry.degraded = True

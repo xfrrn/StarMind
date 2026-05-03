@@ -160,18 +160,30 @@ class AnalysisService:
         self.state_transition_service = state_transition_service or StateTransitionService()
         self.expected_embedding_dim = int(settings.embedding_dimension)
 
-    async def run_pending_repository_analysis(self, db: AsyncSession) -> dict:
+    async def run_pending_repository_analysis(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        """Run AI analysis on pending repositories for a specific user.
+
+        Args:
+            db: Database session
+            user_id: User ID to limit analysis to
+
+        Returns:
+            Dictionary with processed and failed counts
+        """
         if self.runtime_state.get_sync_status()["is_syncing"]:
             raise RuntimeError("A sync or analysis is already in progress")
 
+        # Only select repos that truly need AI analysis (only for this user)
+        # - analyze_status is NULL or empty (never analyzed)
+        # - analyze_status is "pending" or "failed" (needs analysis or retry)
         result = await db.execute(
             select(Repository).where(
+                Repository.user_id == user_id,
+            ).where(
                 or_(
-                    Repository.process_status.in_(["cleaned", "failed"]),
-                    Repository.analyze_status.in_(["pending", "failed", "running"]),
-                    Repository.repo_metadata_embedding.is_(None),
-                    Repository.readme_embedding.is_(None),
-                    Repository.embedding_version != self.settings.embedding_version,
+                    Repository.analyze_status.is_(None),
+                    Repository.analyze_status == "",
+                    Repository.analyze_status.in_(["pending", "failed"]),
                 )
             )
         )
@@ -185,7 +197,7 @@ class AnalysisService:
 
         processed_count = 0
         failed_count = 0
-        analysis_log = SyncLog(status="success", started_at=datetime.utcnow(), details="")
+        analysis_log = SyncLog(status="success", started_at=datetime.utcnow(), details="", user_id=user_id)
         concurrency = max(1, self.settings.ai_analysis_concurrency)
         delay_seconds = max(0.0, self.settings.ai_analysis_request_delay_seconds)
         checkpoint_every = max(1, self.settings.ai_analysis_checkpoint_every)

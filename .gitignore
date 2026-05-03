@@ -39,12 +39,14 @@ backend/dist/
 # =========================
 # Node / Frontend
 # =========================
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-frontend/*.local
-frontend/.eslintcache
-frontend/coverage/
+node_modules/
+packages/frontend/node_modules/
+packages/frontend/dist/
+packages/frontend/dist-ssr/
+packages/frontend/*.local
+packages/frontend/.eslintcache
+packages/frontend/coverage/
+pnpm-lock.yaml
 
 # =========================
 # Environment Variables
@@ -55,12 +57,18 @@ frontend/coverage/
 backend/.env
 backend/.env.*
 !backend/.env.example
+packages/frontend/.env
+!packages/frontend/.env.example
+packages/frontend/dist/
+packages/frontend/guidelines/
+packages/frontend/node_modules/
 
 # =========================
 # Docker
 # =========================
 .dockerignore
 pgdata/
-
+backend/data/
 
 参考项目/
+docker-compose.yml

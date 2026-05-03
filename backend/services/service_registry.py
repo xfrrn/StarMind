@@ -12,6 +12,7 @@ from services.application import (
 )
 from services.application.runtime import SyncRuntimeState
 from services.chat.chat_service import ChatService
+from services.chat.repo_chat_service import RepoChatService
 from services.domain import StateTransitionService
 from services.readme_cleaning.cleaner import ReadmeCleaner
 
@@ -45,12 +46,20 @@ chat_service = ChatService(
     llm_client=llm_client,
     embedding_service=embedding_service,
 )
+repo_chat_service = RepoChatService(
+    settings=settings,
+    llm_client=llm_client,
+)
 repository_service = RepositoryService(settings)
 settings_service = SettingsService()
 
 
 def get_chat_service() -> ChatService:
     return chat_service
+
+
+def get_repo_chat_service() -> RepoChatService:
+    return repo_chat_service
 
 
 def get_repository_service() -> RepositoryService:

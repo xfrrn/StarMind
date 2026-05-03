@@ -8,25 +8,36 @@ StarMind is a GitHub starred repository intelligent analyzer. Users can search t
 
 ## Development Commands
 
-### Backend (Python/FastAPI)
+This is a Monorepo with `backend/` (Python/uv) and `packages/frontend/` (React/pnpm).
+
+### Quick Start (Monorepo Root)
 ```bash
-cd backend
-uv sync                                    # Install dependencies
-uv run uvicorn main:app --reload --port 8000  # Start dev server
-uv run pytest                              # Run tests
+pnpm install:all      # Install frontend + backend dependencies
+pnpm dev:all          # Start both frontend and backend dev servers
 ```
 
 ### Frontend (React/Vite)
 ```bash
-cd frontend
-pnpm install                               # Install dependencies
-pnpm dev                                   # Start dev server (port 5173)
-pnpm build                                 # Production build
+pnpm dev:frontend     # Start dev server (port 5173)
+pnpm build:frontend   # Production build
+pnpm preview:frontend  # Preview production build
 ```
 
-### Full Stack (Docker)
+### Backend (Python/FastAPI)
 ```bash
-docker-compose up                          # PostgreSQL + backend + frontend
+pnpm dev:backend      # Start dev server (port 8000)
+pnpm sync:backend     # Sync dependencies (uv sync)
+pnpm test:backend     # Run tests (pytest)
+# Or directly:
+cd backend && uv sync
+cd backend && uv run uvicorn main:app --reload --port 8000
+```
+
+### Docker
+```bash
+pnpm docker:up        # PostgreSQL + backend + frontend
+pnpm docker:down      # Stop all services
+pnpm docker:build     # Build images
 ```
 
 ## Architecture
@@ -102,3 +113,5 @@ Required in `backend/.env`:
 - Async/await for all I/O operations
 - Type annotations on all function signatures
 - Use `logging` module, not `print`
+
+Any GIt commit must agreed by me.

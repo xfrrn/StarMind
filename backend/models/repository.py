@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -13,6 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.orm import relationship
 
 from config import get_settings
 from models.database import Base
@@ -24,6 +26,7 @@ class Repository(Base):
     __tablename__ = "repositories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     github_id = Column(BigInteger, unique=True, nullable=False, index=True)
     name = Column(Text, nullable=False)  # owner/repo
     description = Column(Text, default="")
@@ -61,9 +64,25 @@ class Repository(Base):
     embedding_version = Column(String(20), default="")
     embedding_updated_at = Column(DateTime, default=None)
 
+    # Archive fields
+    is_archived = Column(Boolean, default=False)
+    archive_path = Column(Text, default="")
+    archive_size = Column(BigInteger, default=0)
+    archive_sha = Column(String(64), default="")
+    archived_at = Column(DateTime, default=None)
+
+    # Relationships
+    collections = relationship(
+        "Collection",
+        secondary="collection_repos",
+        back_populates="repositories",
+    )
+    user = relationship("User", back_populates="repositories")
+
     __table_args__ = (
         Index("ix_repositories_language", "language"),
         Index("ix_repositories_category", "category"),
+        Index("ix_repositories_user_id", "user_id"),
     )
 
 
@@ -71,12 +90,16 @@ class SyncLog(Base):
     __tablename__ = "sync_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     status = Column(String(20), nullable=False)  # success, warning, error
     started_at = Column(DateTime, default=datetime.datetime.utcnow)
     finished_at = Column(DateTime, default=None)
     new_repos = Column(Integer, default=0)
     updated_repos = Column(Integer, default=0)
     details = Column(Text, default="")
+
+    # Relationship
+    user = relationship("User", back_populates="sync_logs")
 
 
 class Setting(Base):

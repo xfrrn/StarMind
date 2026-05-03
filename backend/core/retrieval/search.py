@@ -32,12 +32,14 @@ def build_weighted_vector_search_sql(
     *,
     extra_columns: str = "",
     include_distances: bool = False,
+    user_id: int | None = None,
 ) -> str:
     """Build SQL for weighted vector similarity search.
 
     Args:
         extra_columns: Additional columns to select (comma-separated)
         include_distances: If True, include individual metadata_distance and readme_distance columns
+        user_id: If provided, filter by user_id
 
     Returns:
         SQL query string with placeholders for query_embedding, metadata_weight, readme_weight, and limit
@@ -50,12 +52,15 @@ def build_weighted_vector_search_sql(
             COALESCE(readme_embedding <=> :query_embedding, 2.0) AS readme_distance,
         """
 
+    user_filter = "AND user_id = :user_id" if user_id is not None else ""
+
     return f"""
         SELECT {VECTOR_SEARCH_COMMON_COLUMNS}{extra_cols},
                {distance_columns}
                {VECTOR_SEARCH_DISTANCE_EXPR}
         FROM repositories
         WHERE {VECTOR_SEARCH_WHERE_CLAUSE}
+        {user_filter}
         ORDER BY distance
         LIMIT :limit
     """

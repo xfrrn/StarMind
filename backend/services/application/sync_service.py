@@ -4,12 +4,12 @@ import logging
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
 from core.github import GitHubSyncer
-from models.repository import Repository, SyncLog
+from models.repository import Repository, SyncLog, Setting
 from services.domain import StateTransitionService
 from services.readme_cleaning.cleaner import ReadmeCleaner
 from services.application.analysis_service import AnalysisService
@@ -35,13 +35,19 @@ class SyncService:
         self.readme_cleaner = readme_cleaner or ReadmeCleaner()
         self.state_transition_service = state_transition_service or StateTransitionService()
 
-    async def run_sync(self, db: AsyncSession, github_token: str) -> SyncLog:
+    async def run_sync(
+        self,
+        db: AsyncSession,
+        github_token: str,
+        user_id: int | None = None,
+        full_sync: bool = False,
+    ) -> SyncLog:
         if self.runtime_state.get_sync_status()["is_syncing"]:
             raise RuntimeError("A sync is already in progress")
 
         self.runtime_state.start_sync(total=0)
 
-        log = SyncLog(status="success", started_at=datetime.utcnow(), details="")
+        log = SyncLog(status="success", started_at=datetime.utcnow(), details="", user_id=user_id)
         new_count = 0
         updated_count = 0
         run_id = f"sync-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
@@ -49,17 +55,18 @@ class SyncService:
         try:
             syncer = GitHubSyncer(github_token)
 
-            last_sync = await db.execute(select(func.max(Repository.synced_at)))
-            last_sync_time = last_sync.scalar()
+            # Always fetch all repos (no time filter)
+            # Difference: full_sync resets AI analysis, incremental only updates basic info
+            logger.info("Sync mode: %s", "full" if full_sync else "incremental")
 
             starred_repos = await syncer.fetch_starred_repos(
-                since=last_sync_time,
+                since=None,  # Always get all repos
                 concurrency=self.settings.github_sync_page_concurrency,
             )
             self.runtime_state.set_total(len(starred_repos))
 
             if not starred_repos:
-                log.details = "No new starred repositories found."
+                log.details = "No starred repositories found."
                 log.finished_at = datetime.utcnow()
                 db.add(log)
                 await db.commit()
@@ -73,9 +80,10 @@ class SyncService:
 
             # Batch load existing repositories to avoid N+1 queries
             github_ids = [repo_data["github_id"] for repo_data in starred_repos]
-            existing_result = await db.execute(
-                select(Repository).where(Repository.github_id.in_(github_ids))
-            )
+            query = select(Repository).where(Repository.github_id.in_(github_ids))
+            if user_id is not None:
+                query = query.where(Repository.user_id == user_id)
+            existing_result = await db.execute(query)
             existing_by_github_id = {r.github_id: r for r in existing_result.scalars().all()}
 
             for i, repo_data in enumerate(starred_repos):
@@ -95,6 +103,7 @@ class SyncService:
 
                 if existing_repo:
                     self.state_transition_service.ensure_defaults(existing_repo)
+                    # Always update basic info
                     existing_repo.name = repo_data["name"]
                     existing_repo.description = repo_data["description"]
                     existing_repo.stars = repo_data["stars"]
@@ -102,30 +111,34 @@ class SyncService:
                     existing_repo.topics = repo_data.get("topics", [])
                     existing_repo.url = repo_data["url"]
                     existing_repo.homepage = repo_data.get("homepage", "")
-                    existing_repo.readme = readme
-                    existing_repo.readme_for_analysis = readme_for_analysis
-                    existing_repo.readme_for_embedding = readme_for_embedding
-                    existing_repo.cleaning_version = "v1"
                     existing_repo.updated_at = updated_at
                     existing_repo.last_updated = format_relative_time(updated_at)
                     existing_repo.synced_at = datetime.utcnow()
-                    existing_repo.category = "Pending Analysis"
-                    existing_repo.tags = []
-                    existing_repo.ai_summary = ""
-                    existing_repo.has_ui = False
-                    existing_repo.has_api = False
-                    existing_repo.activity_level = "Medium"
-                    existing_repo.embedding = None
-                    existing_repo.repo_metadata_embedding = None
-                    existing_repo.readme_embedding = None
-                    existing_repo.metadata_hash = ""
-                    existing_repo.readme_hash = ""
-                    existing_repo.embedding_version = ""
-                    existing_repo.embedding_updated_at = None
-                    existing_repo.analyze_status = "pending"
-                    existing_repo.embedding_status = "pending"
-                    existing_repo.last_error_code = ""
-                    existing_repo.last_error_detail = ""
+
+                    # Full sync: reset AI analysis and embeddings
+                    if full_sync:
+                        existing_repo.readme = readme
+                        existing_repo.readme_for_analysis = readme_for_analysis
+                        existing_repo.readme_for_embedding = readme_for_embedding
+                        existing_repo.cleaning_version = "v1"
+                        existing_repo.category = "Pending Analysis"
+                        existing_repo.tags = []
+                        existing_repo.ai_summary = ""
+                        existing_repo.has_ui = False
+                        existing_repo.has_api = False
+                        existing_repo.activity_level = "Medium"
+                        existing_repo.embedding = None
+                        existing_repo.repo_metadata_embedding = None
+                        existing_repo.readme_embedding = None
+                        existing_repo.metadata_hash = ""
+                        existing_repo.readme_hash = ""
+                        existing_repo.embedding_version = ""
+                        existing_repo.embedding_updated_at = None
+                        existing_repo.analyze_status = "pending"
+                        existing_repo.embedding_status = "pending"
+                        existing_repo.last_error_code = ""
+                        existing_repo.last_error_detail = ""
+
                     try:
                         db.add(
                             self.state_transition_service.transition(
@@ -172,6 +185,7 @@ class SyncService:
                         starred_at=starred_at,
                         synced_at=datetime.utcnow(),
                         embedding=None,
+                        user_id=user_id,
                     )
                     db.add(new_repo)
                     await db.flush()
@@ -194,11 +208,10 @@ class SyncService:
 
             log.new_repos = new_count
             log.updated_repos = updated_count
+            sync_type = "Full sync" if full_sync else "Incremental sync"
             log.details = (
-                f"Synced {new_count} new starred repositories. "
-                f"Updated {updated_count} existing records. "
-                f"GitHub page concurrency={max(1, self.settings.github_sync_page_concurrency)}, "
-                f"README concurrency={max(1, self.settings.github_readme_concurrency)}."
+                f"{sync_type}: {new_count} new, {updated_count} updated. "
+                f"(concurrency: page={self.settings.github_sync_page_concurrency}, readme={self.settings.github_readme_concurrency})"
             )
             log.finished_at = datetime.utcnow()
 
@@ -213,65 +226,118 @@ class SyncService:
             db.add(log)
             await db.commit()
 
+            # Update last_sync_at setting on successful sync
+            if log.status == "success":
+                await self._update_last_sync_at(db)
+
         return log
 
-    async def run_ai_analysis(self, db: AsyncSession) -> dict:
-        return await self.analysis_service.run_pending_repository_analysis(db)
+    async def _update_last_sync_at(self, db: AsyncSession) -> None:
+        """Update the last_sync_at setting with current timestamp."""
+        try:
+            result = await db.execute(select(Setting).where(Setting.key == "last_sync_at"))
+            setting = result.scalar_one_or_none()
+            now_iso = datetime.utcnow().isoformat()
+            if setting:
+                setting.value = now_iso
+            else:
+                db.add(Setting(key="last_sync_at", value=now_iso))
+            await db.commit()
+        except Exception as e:
+            logger.warning("Failed to update last_sync_at: %s", e)
 
-    async def get_sync_status_overview(self, db: AsyncSession) -> dict:
+    async def run_ai_analysis(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        return await self.analysis_service.run_pending_repository_analysis(db, user_id=user_id)
+
+    async def get_sync_status_overview(self, db: AsyncSession, user_id: int | None = None) -> dict:
+        """Get sync status overview for a specific user.
+
+        Args:
+            db: Database session
+            user_id: User ID to filter by
+
+        Returns:
+            Dictionary with sync status information
+        """
         status = self.runtime_state.get_sync_status()
 
-        total_result = await db.execute(select(func.count(Repository.id)))
+        # Base query filter for user
+        user_filter = (Repository.user_id == user_id,) if user_id is not None else ()
+
+        total_result = await db.execute(
+            select(func.count(Repository.id)).where(*user_filter)
+        )
         total_stars = total_result.scalar() or 0
 
         indexed_result = await db.execute(
             select(func.count(Repository.id)).where(
+                *user_filter,
                 or_(
                     Repository.embedding_status == "success",
                     Repository.repo_metadata_embedding.isnot(None),
                     Repository.readme_embedding.isnot(None),
                     Repository.embedding.isnot(None),
-                )
+                ),
             )
         )
         indexed_repos = indexed_result.scalar() or 0
 
+        # A repo is pending AI analysis if analyze_status is not "success"
+        # This means: pending, failed, running, or never analyzed (NULL/empty)
         pending_result = await db.execute(
             select(func.count(Repository.id)).where(
+                *user_filter,
                 or_(
-                    Repository.process_status.in_(["cleaned", "failed"]),
-                    Repository.analyze_status.in_(["pending", "failed", "running"]),
-                    Repository.repo_metadata_embedding.is_(None),
-                    Repository.readme_embedding.is_(None),
-                    Repository.embedding_version != self.settings.embedding_version,
-                )
+                    Repository.analyze_status == None,
+                    Repository.analyze_status == "",
+                    Repository.analyze_status == "pending",
+                    Repository.analyze_status == "failed",
+                    Repository.analyze_status == "running",
+                ),
             )
         )
         pending_repos = pending_result.scalar() or 0
 
-        last_sync_result = await db.execute(
+        # Get last sync log for this user
+        last_sync_query = (
             select(SyncLog.finished_at)
             .where(SyncLog.status == "success")
             .order_by(SyncLog.finished_at.desc())
             .limit(1)
         )
+        if user_id is not None:
+            last_sync_query = last_sync_query.where(SyncLog.user_id == user_id)
+        last_sync_result = await db.execute(last_sync_query)
         last_sync = format_last_sync_time(last_sync_result.scalar())
 
-        logs_result = await db.execute(
-            select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
-        )
+        # Get sync logs for this user
+        logs_query = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
+        if user_id is not None:
+            logs_query = logs_query.where(SyncLog.user_id == user_id)
+        logs_result = await db.execute(logs_query)
         logs = logs_result.scalars().all()
         log_list = [to_sync_log_item(log.status, log.started_at, log.details or "") for log in logs]
 
-        process_rows = await db.execute(
-            select(Repository.process_status, func.count(Repository.id)).group_by(Repository.process_status)
+        # Get status breakdown for this user
+        process_query = (
+            select(Repository.process_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.process_status)
         )
-        analyze_rows = await db.execute(
-            select(Repository.analyze_status, func.count(Repository.id)).group_by(Repository.analyze_status)
+        analyze_query = (
+            select(Repository.analyze_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.analyze_status)
         )
-        embedding_rows = await db.execute(
-            select(Repository.embedding_status, func.count(Repository.id)).group_by(Repository.embedding_status)
+        embedding_query = (
+            select(Repository.embedding_status, func.count(Repository.id))
+            .where(*user_filter)
+            .group_by(Repository.embedding_status)
         )
+
+        process_rows = await db.execute(process_query)
+        analyze_rows = await db.execute(analyze_query)
+        embedding_rows = await db.execute(embedding_query)
         process_breakdown = {
             (row[0] or "unknown"): row[1]
             for row in process_rows.all()
