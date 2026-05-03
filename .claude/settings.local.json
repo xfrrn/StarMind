@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/codes/MyGithub/**)",
+      "Bash(cat backend/.dockerignore)",
+      "Bash(cat frontend/.dockerignore)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'docs: add comprehensive optimization design spec:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit -m 'docs: add Phase 1 implementation plan \\(security & infrastructure\\):*)",
+      "Bash(uv run:*)",
+      "Bash(git commit:*)",
+      "Bash(uv sync:*)",
+      "Bash(python -c \"from slowapi import Limiter; print\\('slowapi import works'\\)\")",
+      "Bash(python -m py_compile routers/health.py)",
+      "Bash(python -m py_compile main.py)",
+      "Bash(uv add:*)",
+      "Bash(ls -la *.py)",
+      "Bash(grep -n \"JSONB\" models/*.py)",
+      "Bash(echo \"Compile check: $?\")",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm lint:*)"
+    ]
+  }
+}

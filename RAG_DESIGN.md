@@ -34,11 +34,11 @@ app/
 
 ### 2.1 技术选型
 
-| 组件 | 选择 | 说明 |
-|------|------|------|
+| 组件   | 选择                  | 说明                         |
+| ------ | --------------------- | ---------------------------- |
 | 数据库 | PostgreSQL + pgvector | 复用现有数据库，无需额外维护 |
-| 相似度 | 余弦相似度 | `<=>` 操作符 |
-| 索引 | IVFFlat | 适合≤2000维向量 |
+| 相似度 | 余弦相似度            | `<=>` 操作符                 |
+| 索引   | IVFFlat               | 适合≤2000维向量              |
 
 ### 2.2 核心表结构
 
@@ -67,12 +67,12 @@ LIMIT {top_k}
 
 ### 2.4 核心方法
 
-| 方法 | 功能 |
-|------|------|
-| `insert()` | 单条插入，支持冲突更新 |
-| `insert_batch()` | 批量插入 |
-| `retrieve()` | 余弦相似度检索，支持文档过滤 |
-| `delete_by_*` | 级联删除（chunk/doc/kb级别） |
+| 方法             | 功能                         |
+| ---------------- | ---------------------------- |
+| `insert()`       | 单条插入，支持冲突更新       |
+| `insert_batch()` | 批量插入                     |
+| `retrieve()`     | 余弦相似度检索，支持文档过滤 |
+| `delete_by_*`    | 级联删除（chunk/doc/kb级别） |
 
 ---
 
@@ -80,15 +80,16 @@ LIMIT {top_k}
 
 ### 3.1 文档解析器
 
-| 格式 | 解析器 | 依赖库 | 特性 |
-|------|--------|--------|------|
-| `.txt/.md` | TextParser | 标准库 | 多编码检测 (utf-8, gbk, gb2312, latin-1) |
-| `.pdf` | PDFParser | pypdf | 分页提取，页码标记 |
-| `.docx` | DOCXParser | python-docx | 段落+表格提取 |
+| 格式       | 解析器     | 依赖库      | 特性                                     |
+| ---------- | ---------- | ----------- | ---------------------------------------- |
+| `.txt/.md` | TextParser | 标准库      | 多编码检测 (utf-8, gbk, gb2312, latin-1) |
+| `.pdf`     | PDFParser  | pypdf       | 分页提取，页码标记                       |
+| `.docx`    | DOCXParser | python-docx | 段落+表格提取                            |
 
 ### 3.2 递归分块策略
 
 **分隔符优先级：**
+
 ```
 1. \n\n    (段落)
 2. \n      (换行)
@@ -101,6 +102,7 @@ LIMIT {top_k}
 ```
 
 **关键参数：**
+
 ```python
 RecursiveCharacterChunker(
     chunk_size: int = 512,      # 块大小（字符）
@@ -119,6 +121,7 @@ RecursiveCharacterChunker(
 ```
 
 **处理阶段枚举：**
+
 ```python
 class ProcessingStage(str, Enum):
     PENDING = "pending"
@@ -162,11 +165,11 @@ for i in range(0, len(texts), batch_size):
 
 ### 5.1 三种检索触发场景
 
-| 场景 | 触发方式 | 说明 |
-|------|----------|------|
-| 工具调用 | LLM主动 | LLM决定何时调用 `query_knowledge_base` |
-| 强制查询 | 用户设置 | `force_kb_query=True` 时自动检索 |
-| 阶段检索 | 自动 | 根据L1-L5调研阶段自动注入知识库 |
+| 场景     | 触发方式 | 说明                                   |
+| -------- | -------- | -------------------------------------- |
+| 工具调用 | LLM主动  | LLM决定何时调用 `query_knowledge_base` |
+| 强制查询 | 用户设置 | `force_kb_query=True` 时自动检索       |
+| 阶段检索 | 自动     | 根据L1-L5调研阶段自动注入知识库        |
 
 ### 5.2 检索参数
 
@@ -254,11 +257,11 @@ async def query_knowledge_base(
 
 ### 7.1 压缩策略
 
-| 策略 | 实现 |
-|------|------|
-| truncate | 删除最早消息 |
-| halving | 保留后半部分 |
-| llm_summary | LLM总结前文 |
+| 策略        | 实现         |
+| ----------- | ------------ |
+| truncate    | 删除最早消息 |
+| halving     | 保留后半部分 |
+| llm_summary | LLM总结前文  |
 
 ### 7.2 触发条件
 
@@ -349,17 +352,17 @@ CONTEXT_COMPRESSION_STRATEGY: str          # 压缩策略
 
 ## 10. 核心文件索引
 
-| 功能 | 文件路径 |
-|------|---------|
+| 功能       | 文件路径                                                 |
+| ---------- | -------------------------------------------------------- |
 | 向量数据库 | `app/core/knowledge_base/vec_db/pgvector_impl/vec_db.py` |
-| 检索器 | `app/core/knowledge_base/retrieval/retriever.py` |
-| 分块器 | `app/core/knowledge_base/chunking/recursive.py` |
-| 文档解析 | `app/core/knowledge_base/parsers/` |
-| 嵌入服务 | `app/services/embedding_service.py` |
-| 知识库服务 | `app/services/knowledge_base_service.py` |
-| 上下文管理 | `app/services/context_manager.py` |
-| LLM集成 | `app/api/v1/chat.py` |
-| 知识库工具 | `app/tools/builtin/knowledge_base.py` |
+| 检索器     | `app/core/knowledge_base/retrieval/retriever.py`         |
+| 分块器     | `app/core/knowledge_base/chunking/recursive.py`          |
+| 文档解析   | `app/core/knowledge_base/parsers/`                       |
+| 嵌入服务   | `app/services/embedding_service.py`                      |
+| 知识库服务 | `app/services/knowledge_base_service.py`                 |
+| 上下文管理 | `app/services/context_manager.py`                        |
+| LLM集成    | `app/api/v1/chat.py`                                     |
+| 知识库工具 | `app/tools/builtin/knowledge_base.py`                    |
 
 ---
 
@@ -367,15 +370,15 @@ CONTEXT_COMPRESSION_STRATEGY: str          # 压缩策略
 
 ### 优势
 
-| 特性 | 说明 |
-|------|------|
-| **多格式支持** | PDF、DOCX、TXT、Markdown、音频 |
-| **递归分块** | 多级分隔符，保留语义完整性 |
-| **系统知识库** | 按调研阶段预置领域知识 |
+| 特性             | 说明                           |
+| ---------------- | ------------------------------ |
+| **多格式支持**   | PDF、DOCX、TXT、Markdown、音频 |
+| **递归分块**     | 多级分隔符，保留语义完整性     |
+| **系统知识库**   | 按调研阶段预置领域知识         |
 | **三种检索模式** | 工具调用 + 强制查询 + 阶段检索 |
-| **音频处理** | ASR + LLM润色整合 |
-| **上下文压缩** | 多策略应对长对话 |
-| **流式响应** | SSE实时输出 |
+| **音频处理**     | ASR + LLM润色整合              |
+| **上下文压缩**   | 多策略应对长对话               |
+| **流式响应**     | SSE实时输出                    |
 
 ### 架构特点
 
@@ -398,4 +401,4 @@ CONTEXT_COMPRESSION_STRATEGY: str          # 压缩策略
 
 ---
 
-*文档生成时间: 2026-03-22*
+_文档生成时间: 2026-03-22_
